@@ -1,0 +1,105 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Ampæra",
+        "description": "Enter your API key from Settings → API in the Ampæra web app.",
+        "data": {
+          "api_key": "API Key"
+        }
+      },
+      "sites": {
+        "title": "Select Sites",
+        "description": "Choose which sites to add to Home Assistant.",
+        "data": {
+          "site_ids": "Sites"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate Ampæra",
+        "description": "Your API key for {site_name} has expired. Please enter a new API key.",
+        "data": {
+          "api_key": "API Key"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid API key",
+      "cannot_connect": "Cannot connect to Ampæra",
+      "no_sites": "No sites found for this API key",
+      "no_sites_selected": "Please select at least one site",
+      "unknown": "An unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "This site is already configured",
+      "reauth_successful": "Reauthentication successful"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Ampæra Settings",
+        "data": {
+          "polling_interval": "Update interval (seconds)",
+          "enable_sse": "Enable real-time updates",
+          "enable_voltage_sensors": "Show voltage sensors"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "power": {
+        "name": "Power"
+      },
+      "energy_today": {
+        "name": "Energy today"
+      },
+      "energy_total": {
+        "name": "Total energy"
+      },
+      "cost_today": {
+        "name": "Cost today"
+      },
+      "spot_price": {
+        "name": "Spot price"
+      },
+      "voltage_l1": {
+        "name": "Voltage L1"
+      },
+      "voltage_l2": {
+        "name": "Voltage L2"
+      },
+      "voltage_l3": {
+        "name": "Voltage L3"
+      },
+      "current_l1": {
+        "name": "Current L1"
+      },
+      "current_l2": {
+        "name": "Current L2"
+      },
+      "current_l3": {
+        "name": "Current L3"
+      }
+    },
+    "switch": {
+      "power": {
+        "name": "Power"
+      }
+    },
+    "water_heater": {
+      "water_heater": {
+        "name": "Water heater"
+      }
+    },
+    "binary_sensor": {
+      "connected": {
+        "name": "Connected"
+      },
+      "charging": {
+        "name": "Charging"
+      }
+    }
+  }
+}

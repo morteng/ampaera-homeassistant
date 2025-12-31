@@ -1,0 +1,62 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Ampæra",
+        "description": "Enter your API key from Settings → API in the Ampæra web app. Leave API URL empty to use production ({default_url}).",
+        "data": {
+          "api_key": "API Key",
+          "api_url": "API URL (optional, for development)"
+        }
+      },
+      "location": {
+        "title": "Configure Site",
+        "description": "Set your site name and select your electricity grid region for accurate spot pricing.",
+        "data": {
+          "site_name": "Site name",
+          "grid_region": "Grid region"
+        }
+      },
+      "devices": {
+        "title": "Select Devices",
+        "description": "Choose which Home Assistant devices to sync with Ampæra. Found {device_count} compatible devices.",
+        "data": {
+          "selected_entities": "Devices to sync"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate Ampæra",
+        "description": "Your API key has expired. Please enter a new API key.",
+        "data": {
+          "api_key": "API Key"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid API key",
+      "cannot_connect": "Cannot connect to Ampæra",
+      "no_devices_found": "No compatible devices found in Home Assistant",
+      "no_devices_selected": "Please select at least one device",
+      "registration_failed": "Failed to register with Ampæra",
+      "unknown": "An unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "This Home Assistant instance is already configured",
+      "reauth_successful": "Reauthentication successful"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Ampæra Settings",
+        "description": "Configure how the integration syncs with Ampæra.",
+        "data": {
+          "polling_interval": "Telemetry push interval (seconds)",
+          "command_poll_interval": "Command poll interval (seconds)",
+          "device_sync_interval": "Device sync interval (seconds)",
+          "enable_voltage_sensors": "Include voltage sensors in telemetry"
+        }
+      }
+    }
+  }
+}

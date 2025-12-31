@@ -1,0 +1,18 @@
+{
+  "domain": "ampaera",
+  "name": "Ampæra Energy",
+  "codeowners": [
+    "@morteng"
+  ],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/morteng/ampaera-homeassistant",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/morteng/amp/issues?q=label%3Ahomeassistant",
+  "requirements": [
+    "aiohttp>=3.9.0",
+    "aiolimiter>=1.1.0"
+  ],
+  "version": "0.0.0-dev"
+}

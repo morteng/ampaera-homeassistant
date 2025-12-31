@@ -1,0 +1,62 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Koble til Ampæra",
+        "description": "Oppgi API-nøkkelen din fra Innstillinger → API i Ampæra-appen. La API-URL stå tom for å bruke produksjon ({default_url}).",
+        "data": {
+          "api_key": "API-nøkkel",
+          "api_url": "API-URL (valgfritt, for utvikling)"
+        }
+      },
+      "location": {
+        "title": "Konfigurer sted",
+        "description": "Angi stedsnavn og velg din nettregion for riktig spotprising.",
+        "data": {
+          "site_name": "Stedsnavn",
+          "grid_region": "Nettregion"
+        }
+      },
+      "devices": {
+        "title": "Velg enheter",
+        "description": "Velg hvilke Home Assistant-enheter som skal synkroniseres med Ampæra. Fant {device_count} kompatible enheter.",
+        "data": {
+          "selected_entities": "Enheter å synkronisere"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Autentiser Ampæra på nytt",
+        "description": "API-nøkkelen din har utløpt. Vennligst oppgi en ny API-nøkkel.",
+        "data": {
+          "api_key": "API-nøkkel"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Ugyldig API-nøkkel",
+      "cannot_connect": "Kan ikke koble til Ampæra",
+      "no_devices_found": "Ingen kompatible enheter funnet i Home Assistant",
+      "no_devices_selected": "Velg minst én enhet",
+      "registration_failed": "Kunne ikke registrere hos Ampæra",
+      "unknown": "En uventet feil oppstod"
+    },
+    "abort": {
+      "already_configured": "Denne Home Assistant-installasjonen er allerede konfigurert",
+      "reauth_successful": "Autentisering vellykket"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Ampæra-innstillinger",
+        "description": "Konfigurer hvordan integrasjonen synkroniserer med Ampæra.",
+        "data": {
+          "polling_interval": "Telemetri-sendeintervall (sekunder)",
+          "command_poll_interval": "Kommando-hentingsintervall (sekunder)",
+          "device_sync_interval": "Enhetssynkroniseringsintervall (sekunder)",
+          "enable_voltage_sensors": "Inkluder spenningssensorer i telemetri"
+        }
+      }
+    }
+  }
+}
