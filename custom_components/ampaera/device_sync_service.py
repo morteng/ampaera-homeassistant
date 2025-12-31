@@ -2,6 +2,9 @@
 
 Periodically syncs the device list from Home Assistant to Ampæra,
 keeping devices in sync as they are added, removed, or changed in HA.
+
+Supports entity-to-device mapping where multiple HA entities
+(sensors) are grouped under a single parent device.
 """
 
 from __future__ import annotations
@@ -14,7 +17,8 @@ from homeassistant.core import Event, callback
 from homeassistant.helpers.event import async_track_time_interval
 
 from .const import DEFAULT_DEVICE_SYNC_INTERVAL
-from .device_discovery import AmperaDeviceDiscovery
+from .device_discovery import AmperaDeviceDiscovery, DiscoveredDevice
+from .push_service import EntityMapping
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -30,8 +34,9 @@ class AmperaDeviceSyncService:
 
     This service:
     - Discovers devices in Home Assistant using AmperaDeviceDiscovery
+    - Groups entities by parent device_id from HA device registry
     - Syncs them to Ampæra via the /ha/devices/sync endpoint
-    - Keeps device_mappings updated for telemetry push
+    - Keeps entity_mappings updated for telemetry push
     - Runs periodically and on HA startup/reload
     """
 
@@ -41,7 +46,7 @@ class AmperaDeviceSyncService:
         entry: ConfigEntry,
         api_client: AmperaApiClient,
         site_id: str,
-        selected_entities: list[str],
+        selected_device_ids: list[str],
         sync_interval: int = DEFAULT_DEVICE_SYNC_INTERVAL,
     ) -> None:
         """Initialize the device sync service.
@@ -51,24 +56,32 @@ class AmperaDeviceSyncService:
             entry: Config entry (for updating device_mappings)
             api_client: Ampæra API client
             site_id: Ampæra site UUID
-            selected_entities: List of entity IDs selected for sync
+            selected_device_ids: List of HA device IDs selected for sync
             sync_interval: Seconds between sync cycles (default: 5 minutes)
         """
         self._hass = hass
         self._entry = entry
         self._api = api_client
         self._site_id = site_id
-        self._selected_entities = set(selected_entities)
+        self._selected_device_ids = set(selected_device_ids)
         self._sync_interval = sync_interval
         self._discovery = AmperaDeviceDiscovery(hass)
         self._unsub_timer: asyncio.TimerHandle | None = None
         self._running = False
-        self._device_mappings: dict[str, str] = {}
+        # Maps ha_device_id → ampera_device_id
+        self._device_id_mappings: dict[str, str] = {}
+        # Maps entity_id → EntityMapping (for push service)
+        self._entity_mappings: dict[str, EntityMapping] = {}
 
     @property
-    def device_mappings(self) -> dict[str, str]:
-        """Return current device mappings (ha_entity_id -> ampera_device_id)."""
-        return self._device_mappings
+    def device_id_mappings(self) -> dict[str, str]:
+        """Return current device ID mappings (ha_device_id -> ampera_device_id)."""
+        return self._device_id_mappings
+
+    @property
+    def entity_mappings(self) -> dict[str, EntityMapping]:
+        """Return entity mappings for telemetry push."""
+        return self._entity_mappings
 
     async def async_start(self) -> None:
         """Start the device sync service.
@@ -93,9 +106,9 @@ class AmperaDeviceSyncService:
         )
 
         _LOGGER.info(
-            "Device sync service started (interval: %ds, %d entities selected)",
+            "Device sync service started (interval: %ds, %d devices selected)",
             self._sync_interval,
-            len(self._selected_entities),
+            len(self._selected_device_ids),
         )
 
     async def async_stop(self) -> None:
@@ -140,19 +153,19 @@ class AmperaDeviceSyncService:
     async def _sync_devices(self) -> None:
         """Sync devices to Ampæra.
 
-        Discovers current devices, filters by selected entities,
-        and syncs to Ampæra backend.
+        Discovers current devices, filters by selected device IDs,
+        and syncs to Ampæra backend. Updates entity mappings for push service.
         """
         if not self._running:
             return
 
         try:
-            # Discover all devices
+            # Discover all devices (grouped by parent device_id)
             all_devices = self._discovery.discover_devices()
 
-            # Filter to selected entities only
+            # Filter to selected device IDs only
             selected_devices = [
-                d for d in all_devices if d.entity_id in self._selected_entities
+                d for d in all_devices if d.ha_device_id in self._selected_device_ids
             ]
 
             if not selected_devices:
@@ -168,17 +181,19 @@ class AmperaDeviceSyncService:
                 devices=devices_data,
             )
 
-            # Update device mappings
-            new_mappings = result.get("device_mappings", {})
-            if new_mappings:
-                self._device_mappings = new_mappings
+            # Update device ID mappings (ha_device_id → ampera_device_id)
+            new_device_mappings = result.get("device_mappings", {})
+            if new_device_mappings:
+                self._device_id_mappings = new_device_mappings
+
+                # Build entity mappings for push service
+                self._entity_mappings = self._build_entity_mappings(
+                    selected_devices, new_device_mappings
+                )
 
                 # Update config entry data with new mappings
-                # This ensures push_service and command_service have current mappings
-                new_data = {**self._entry.data, "device_mappings": new_mappings}
-                self._hass.config_entries.async_update_entry(
-                    self._entry, data=new_data
-                )
+                new_data = {**self._entry.data, "device_mappings": new_device_mappings}
+                self._hass.config_entries.async_update_entry(self._entry, data=new_data)
 
             created = result.get("created", 0)
             updated = result.get("updated", 0)
@@ -186,10 +201,11 @@ class AmperaDeviceSyncService:
 
             if created or removed:
                 _LOGGER.info(
-                    "Device sync complete: created=%d, updated=%d, removed=%d",
+                    "Device sync complete: created=%d, updated=%d, removed=%d, entities=%d",
                     created,
                     updated,
                     removed,
+                    len(self._entity_mappings),
                 )
             else:
                 _LOGGER.debug(
@@ -202,11 +218,42 @@ class AmperaDeviceSyncService:
         except Exception as err:
             _LOGGER.error("Device sync failed: %s", err)
 
-    async def async_force_sync(self) -> dict[str, str]:
+    def _build_entity_mappings(
+        self,
+        devices: list[DiscoveredDevice],
+        device_id_mappings: dict[str, str],
+    ) -> dict[str, EntityMapping]:
+        """Build entity mappings from discovered devices.
+
+        Args:
+            devices: List of discovered devices with entity_mapping
+            device_id_mappings: Mapping of ha_device_id → ampera_device_id
+
+        Returns:
+            Dict of entity_id → EntityMapping for push service
+        """
+        entity_mappings: dict[str, EntityMapping] = {}
+
+        for device in devices:
+            ampera_device_id = device_id_mappings.get(device.ha_device_id)
+            if not ampera_device_id:
+                continue
+
+            # Create EntityMapping for each entity in the device
+            for capability, entity_id in device.entity_mapping.items():
+                entity_mappings[entity_id] = EntityMapping(
+                    device_id=ampera_device_id,
+                    capability=capability,
+                    ha_device_id=device.ha_device_id,
+                )
+
+        return entity_mappings
+
+    async def async_force_sync(self) -> tuple[dict[str, str], dict[str, EntityMapping]]:
         """Force an immediate device sync.
 
         Returns:
-            Updated device mappings dict
+            Tuple of (device_id_mappings, entity_mappings)
         """
         await self._sync_devices()
-        return self._device_mappings
+        return self._device_id_mappings, self._entity_mappings

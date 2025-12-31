@@ -6,13 +6,14 @@ Discovers Home Assistant devices suitable for syncing to Ampæra:
 - Switches (smart relays)
 - Climate devices (HVAC)
 
-Also extracts device metadata (manufacturer, model) from HA device registry.
+Groups multiple HA entities by their parent device_id to create
+one logical Ampæra device per physical device.
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -30,6 +31,7 @@ class AmperaDeviceType(str, Enum):
 
     POWER_METER = "power_meter"
     WATER_HEATER = "water_heater"
+    EV_CHARGER = "ev_charger"
     SWITCH = "switch"
     CLIMATE = "climate"
     SENSOR = "sensor"
@@ -40,33 +42,50 @@ class AmperaCapability(str, Enum):
 
     POWER = "power"
     ENERGY = "energy"
+    ENERGY_IMPORT = "energy_import"
+    ENERGY_EXPORT = "energy_export"
+    VOLTAGE_L1 = "voltage_l1"
+    VOLTAGE_L2 = "voltage_l2"
+    VOLTAGE_L3 = "voltage_l3"
+    CURRENT_L1 = "current_l1"
+    CURRENT_L2 = "current_l2"
+    CURRENT_L3 = "current_l3"
     VOLTAGE = "voltage"
     CURRENT = "current"
     TEMPERATURE = "temperature"
+    TARGET_TEMPERATURE = "target_temperature"
     ON_OFF = "on_off"
     HUMIDITY = "humidity"
+    CHARGE_LIMIT = "charge_limit"
+    SESSION_ENERGY = "session_energy"
 
 
 @dataclass
 class DiscoveredDevice:
-    """A device discovered in Home Assistant."""
+    """A device discovered in Home Assistant.
 
-    entity_id: str
+    Represents a physical device (grouped by HA device_id) with
+    multiple entities mapped to capabilities.
+    """
+
+    ha_device_id: str  # HA device registry ID (parent device)
     name: str
     device_type: AmperaDeviceType
-    capabilities: list[AmperaCapability]
-    device_class: str | None = None
-    unit: str | None = None
+    capabilities: list[AmperaCapability] = field(default_factory=list)
+    entity_mapping: dict[str, str] = field(default_factory=dict)  # capability -> entity_id
+    primary_entity_id: str = ""  # Main entity for backward compat
     manufacturer: str | None = None
     model: str | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for API registration."""
         result = {
-            "ha_entity_id": self.entity_id,
+            "ha_device_id": self.ha_device_id,
+            "ha_entity_id": self.primary_entity_id,  # Backward compat
             "device_type": self.device_type.value,
             "name": self.name,
             "capabilities": [c.value for c in self.capabilities],
+            "entity_mapping": self.entity_mapping,
         }
         if self.manufacturer:
             result["manufacturer"] = self.manufacturer
@@ -91,9 +110,18 @@ SUPPORTED_DOMAINS = {
     "climate",
 }
 
+# Keywords to identify device types from device/entity names
+EV_CHARGER_KEYWORDS = {"charger", "ev", "easee", "zaptec", "wallbox", "lader", "elbil"}
+AMS_KEYWORDS = {"ams", "han", "meter", "strømmåler", "power consumption"}
+WATER_HEATER_KEYWORDS = {"water heater", "varmtvannsbereder", "boiler", "hot water"}
+
 
 class AmperaDeviceDiscovery:
-    """Discover HA devices suitable for Ampæra sync."""
+    """Discover HA devices suitable for Ampæra sync.
+
+    Groups multiple HA entities by their parent device_id to create
+    one logical Ampæra device per physical device.
+    """
 
     def __init__(self, hass: HomeAssistant) -> None:
         """Initialize device discovery."""
@@ -101,233 +129,304 @@ class AmperaDeviceDiscovery:
         self._entity_registry: er.EntityRegistry | None = None
         self._device_registry: dr.DeviceRegistry | None = None
 
-    def _get_device_info(self, entity_id: str) -> tuple[str | None, str | None]:
-        """Get manufacturer and model from device registry for an entity.
-
-        Returns tuple of (manufacturer, model), either may be None.
-        """
-        # Lazy load registries
+    def _ensure_registries(self) -> None:
+        """Lazy load registries."""
         if self._entity_registry is None:
             self._entity_registry = er.async_get(self._hass)
         if self._device_registry is None:
             self._device_registry = dr.async_get(self._hass)
 
-        # Get entity registry entry
-        entity_entry = self._entity_registry.async_get(entity_id)
-        if entity_entry is None or entity_entry.device_id is None:
-            return None, None
+    def _get_parent_device_id(self, entity_id: str) -> str | None:
+        """Get the parent device_id for an entity.
 
-        # Get device registry entry
-        device_entry = self._device_registry.async_get(entity_entry.device_id)
-        if device_entry is None:
-            return None, None
-
-        return device_entry.manufacturer, device_entry.model
-
-    def discover_devices(self) -> list[DiscoveredDevice]:
-        """Find all devices suitable for Ampæra sync.
-
-        Returns list of discovered devices with their capabilities.
+        Returns the HA device registry ID, or None if entity has no parent device.
         """
-        devices: list[DiscoveredDevice] = []
+        self._ensure_registries()
+        assert self._entity_registry is not None
 
-        for state in self._hass.states.async_all():
-            device = self._analyze_entity(state)
-            if device:
-                devices.append(device)
+        entity_entry = self._entity_registry.async_get(entity_id)
+        if entity_entry is None:
+            return None
 
-        _LOGGER.info("Discovered %d devices for Ampæra sync", len(devices))
-        return devices
+        return entity_entry.device_id
 
-    def discover_by_domain(self, domain: str) -> list[DiscoveredDevice]:
-        """Discover devices in a specific domain."""
-        devices: list[DiscoveredDevice] = []
+    def _get_device_info(self, device_id: str) -> tuple[str | None, str | None, str | None]:
+        """Get device info from device registry.
 
-        for state in self._hass.states.async_all(domain):
-            device = self._analyze_entity(state)
-            if device:
-                devices.append(device)
+        Returns tuple of (name, manufacturer, model), any may be None.
+        """
+        self._ensure_registries()
+        assert self._device_registry is not None
 
-        return devices
+        device_entry = self._device_registry.async_get(device_id)
+        if device_entry is None:
+            return None, None, None
 
-    def _analyze_entity(self, state: State) -> DiscoveredDevice | None:
-        """Analyze an entity and determine if it's suitable for Ampæra.
+        # Use name_by_user if set, otherwise name
+        name = device_entry.name_by_user or device_entry.name
+        return name, device_entry.manufacturer, device_entry.model
 
-        Returns DiscoveredDevice if suitable, None otherwise.
+    def _determine_device_type(
+        self,
+        device_name: str | None,
+        entities: list[State],
+        manufacturer: str | None,
+    ) -> AmperaDeviceType:
+        """Determine the Ampæra device type based on device info and entities.
+
+        Uses device name, manufacturer, and entity characteristics to classify.
+        """
+        # Build searchable text from device name, manufacturer, and entity names
+        search_text = " ".join(
+            filter(
+                None,
+                [
+                    device_name,
+                    manufacturer,
+                    *[e.attributes.get("friendly_name", "") for e in entities],
+                ],
+            )
+        ).lower()
+
+        # Check for EV charger
+        if any(kw in search_text for kw in EV_CHARGER_KEYWORDS):
+            return AmperaDeviceType.EV_CHARGER
+
+        # Check for water heater domain or keywords
+        if any(e.entity_id.startswith("water_heater.") for e in entities):
+            return AmperaDeviceType.WATER_HEATER
+        if any(kw in search_text for kw in WATER_HEATER_KEYWORDS):
+            return AmperaDeviceType.WATER_HEATER
+
+        # Check for AMS/power meter
+        if any(kw in search_text for kw in AMS_KEYWORDS):
+            return AmperaDeviceType.POWER_METER
+
+        # Check for climate
+        if any(e.entity_id.startswith("climate.") for e in entities):
+            return AmperaDeviceType.CLIMATE
+
+        # Check for switch
+        if any(e.entity_id.startswith("switch.") for e in entities):
+            return AmperaDeviceType.SWITCH
+
+        # Default to power_meter if has power/energy sensors
+        if any(e.attributes.get("device_class") in ("power", "energy") for e in entities):
+            return AmperaDeviceType.POWER_METER
+
+        return AmperaDeviceType.SENSOR
+
+    def _analyze_entity_capability(
+        self, state: State
+    ) -> tuple[AmperaCapability | None, str | None]:
+        """Analyze an entity and determine its capability.
+
+        Returns (capability, device_class) or (None, None) if not relevant.
         """
         entity_id = state.entity_id
         domain = entity_id.split(".")[0]
 
         if domain not in SUPPORTED_DOMAINS:
-            return None
+            return None, None
 
-        # Get device class and unit
         device_class = state.attributes.get("device_class")
-        unit = state.attributes.get("unit_of_measurement")
-        friendly_name = state.attributes.get("friendly_name", entity_id)
+        friendly_name = state.attributes.get("friendly_name", entity_id).lower()
 
-        # Get manufacturer and model from device registry
-        manufacturer, model = self._get_device_info(entity_id)
-
-        # Analyze based on domain
+        # Sensor domain
         if domain == "sensor":
-            return self._analyze_sensor(
-                entity_id, friendly_name, device_class, unit, manufacturer, model
-            )
+            if device_class == "power":
+                return AmperaCapability.POWER, device_class
+            elif device_class == "energy":
+                # Check if it's import/export or session energy
+                if "export" in friendly_name:
+                    return AmperaCapability.ENERGY_EXPORT, device_class
+                elif "import" in friendly_name:
+                    return AmperaCapability.ENERGY_IMPORT, device_class
+                elif "session" in friendly_name:
+                    return AmperaCapability.SESSION_ENERGY, device_class
+                return AmperaCapability.ENERGY, device_class
+            elif device_class == "voltage":
+                # Check for phase-specific voltage
+                if "l1" in friendly_name or "phase 1" in friendly_name:
+                    return AmperaCapability.VOLTAGE_L1, device_class
+                elif "l2" in friendly_name or "phase 2" in friendly_name:
+                    return AmperaCapability.VOLTAGE_L2, device_class
+                elif "l3" in friendly_name or "phase 3" in friendly_name:
+                    return AmperaCapability.VOLTAGE_L3, device_class
+                return AmperaCapability.VOLTAGE, device_class
+            elif device_class == "current":
+                # Check for phase-specific current
+                if "l1" in friendly_name or "phase 1" in friendly_name:
+                    return AmperaCapability.CURRENT_L1, device_class
+                elif "l2" in friendly_name or "phase 2" in friendly_name:
+                    return AmperaCapability.CURRENT_L2, device_class
+                elif "l3" in friendly_name or "phase 3" in friendly_name:
+                    return AmperaCapability.CURRENT_L3, device_class
+                return AmperaCapability.CURRENT, device_class
+            elif device_class == "temperature":
+                return AmperaCapability.TEMPERATURE, device_class
+
+        # Water heater domain
         elif domain == "water_heater":
-            return self._analyze_water_heater(
-                entity_id, friendly_name, state, manufacturer, model
-            )
+            return AmperaCapability.TEMPERATURE, "water_heater"
+
+        # Switch domain
         elif domain == "switch":
-            return self._analyze_switch(
-                entity_id, friendly_name, state, manufacturer, model
-            )
+            return AmperaCapability.ON_OFF, "switch"
+
+        # Climate domain
         elif domain == "climate":
-            return self._analyze_climate(
-                entity_id, friendly_name, state, manufacturer, model
-            )
+            return AmperaCapability.TEMPERATURE, "climate"
 
-        return None
+        return None, None
 
-    def _analyze_sensor(
-        self,
-        entity_id: str,
-        name: str,
-        device_class: str | None,
-        unit: str | None,
-        manufacturer: str | None,
-        model: str | None,
+    def discover_devices(self) -> list[DiscoveredDevice]:
+        """Find all devices suitable for Ampæra sync.
+
+        Groups entities by their parent device_id and returns one
+        DiscoveredDevice per physical device with combined capabilities.
+        """
+        self._ensure_registries()
+
+        # Step 1: Group entities by parent device_id
+        device_entities: dict[str, list[State]] = {}
+        orphan_entities: list[State] = []  # Entities without parent device
+
+        for state in self._hass.states.async_all():
+            entity_id = state.entity_id
+            domain = entity_id.split(".")[0]
+
+            if domain not in SUPPORTED_DOMAINS:
+                continue
+
+            device_id = self._get_parent_device_id(entity_id)
+            if device_id:
+                device_entities.setdefault(device_id, []).append(state)
+            else:
+                # Entity without parent device - treat as standalone
+                orphan_entities.append(state)
+
+        # Step 2: Build DiscoveredDevice per parent device
+        devices: list[DiscoveredDevice] = []
+
+        for device_id, entities in device_entities.items():
+            device = self._build_device_from_entities(device_id, entities)
+            if device:
+                devices.append(device)
+
+        # Step 3: Handle orphan entities (create one device per entity)
+        for state in orphan_entities:
+            capability, device_class = self._analyze_entity_capability(state)
+            if capability and device_class:
+                # Create a pseudo device_id from entity_id
+                pseudo_device_id = f"orphan_{state.entity_id}"
+                friendly_name = state.attributes.get("friendly_name", state.entity_id)
+
+                device = DiscoveredDevice(
+                    ha_device_id=pseudo_device_id,
+                    name=friendly_name,
+                    device_type=AmperaDeviceType.SENSOR,
+                    capabilities=[capability],
+                    entity_mapping={capability.value: state.entity_id},
+                    primary_entity_id=state.entity_id,
+                )
+                devices.append(device)
+
+        _LOGGER.info(
+            "Discovered %d devices for Ampæra sync (from %d parent devices, %d orphan entities)",
+            len(devices),
+            len(device_entities),
+            len(orphan_entities),
+        )
+        return devices
+
+    def _build_device_from_entities(
+        self, device_id: str, entities: list[State]
     ) -> DiscoveredDevice | None:
-        """Analyze a sensor entity."""
-        if device_class not in ENERGY_DEVICE_CLASSES:
+        """Build a DiscoveredDevice from a group of entities.
+
+        Analyzes all entities belonging to a parent device and combines
+        their capabilities into a single device.
+        """
+        if not entities:
             return None
 
+        # Get device info from registry
+        device_name, manufacturer, model = self._get_device_info(device_id)
+
+        # Determine device type
+        device_type = self._determine_device_type(device_name, entities, manufacturer)
+
+        # Analyze each entity and build capability mapping
         capabilities: list[AmperaCapability] = []
+        entity_mapping: dict[str, str] = {}
+        primary_entity_id: str = ""
 
-        if device_class == "power":
-            capabilities.append(AmperaCapability.POWER)
-        elif device_class == "energy":
-            capabilities.append(AmperaCapability.ENERGY)
-        elif device_class == "voltage":
-            capabilities.append(AmperaCapability.VOLTAGE)
-        elif device_class == "current":
-            capabilities.append(AmperaCapability.CURRENT)
+        for state in entities:
+            capability, device_class = self._analyze_entity_capability(state)
+            if capability:
+                # Avoid duplicate capabilities
+                if capability not in capabilities:
+                    capabilities.append(capability)
+                    entity_mapping[capability.value] = state.entity_id
 
+                # Set primary entity (prefer power sensor, then first entity)
+                if not primary_entity_id or device_class == "power":
+                    primary_entity_id = state.entity_id
+
+        # Skip devices with no relevant capabilities
         if not capabilities:
             return None
 
+        # Use device registry name if available, else first entity's friendly name
+        if not device_name:
+            device_name = entities[0].attributes.get("friendly_name", entities[0].entity_id)
+
         return DiscoveredDevice(
-            entity_id=entity_id,
-            name=name,
-            device_type=AmperaDeviceType.POWER_METER,
+            ha_device_id=device_id,
+            name=device_name,
+            device_type=device_type,
             capabilities=capabilities,
-            device_class=device_class,
-            unit=unit,
+            entity_mapping=entity_mapping,
+            primary_entity_id=primary_entity_id,
             manufacturer=manufacturer,
             model=model,
         )
 
-    def _analyze_water_heater(
-        self,
-        entity_id: str,
-        name: str,
-        state: State,  # noqa: ARG002
-        manufacturer: str | None,
-        model: str | None,
-    ) -> DiscoveredDevice | None:
-        """Analyze a water heater entity."""
-        capabilities = [
-            AmperaCapability.TEMPERATURE,
-            AmperaCapability.ON_OFF,
-        ]
+    def discover_by_domain(self, domain: str) -> list[DiscoveredDevice]:
+        """Discover devices that have entities in a specific domain.
 
-        return DiscoveredDevice(
-            entity_id=entity_id,
-            name=name,
-            device_type=AmperaDeviceType.WATER_HEATER,
-            capabilities=capabilities,
-            manufacturer=manufacturer,
-            model=model,
-        )
-
-    def _analyze_switch(
-        self,
-        entity_id: str,
-        name: str,
-        state: State,
-        manufacturer: str | None,
-        model: str | None,
-    ) -> DiscoveredDevice | None:
-        """Analyze a switch entity.
-
-        Only include switches that look like they control energy devices.
+        Note: Returns all devices that have at least one entity in the domain,
+        with all their capabilities (not just those from the domain).
         """
-        # Check if switch has power monitoring
-        has_power = "current_power_w" in state.attributes
-        has_energy = "total_energy_kwh" in state.attributes
-
-        capabilities = [AmperaCapability.ON_OFF]
-
-        if has_power:
-            capabilities.append(AmperaCapability.POWER)
-        if has_energy:
-            capabilities.append(AmperaCapability.ENERGY)
-
-        # Include all switches - let the user decide which to sync during config flow
-        # Previously used hardcoded keywords, but this violated anti-hardcoding principles
-        # and missed devices with non-English names or unconventional naming
-        return DiscoveredDevice(
-            entity_id=entity_id,
-            name=name,
-            device_type=AmperaDeviceType.SWITCH,
-            capabilities=capabilities,
-            manufacturer=manufacturer,
-            model=model,
-        )
-
-    def _analyze_climate(
-        self,
-        entity_id: str,
-        name: str,
-        state: State,
-        manufacturer: str | None,
-        model: str | None,
-    ) -> DiscoveredDevice | None:
-        """Analyze a climate entity."""
-        capabilities = [
-            AmperaCapability.TEMPERATURE,
-            AmperaCapability.ON_OFF,
+        all_devices = self.discover_devices()
+        return [
+            d
+            for d in all_devices
+            if any(entity_id.startswith(f"{domain}.") for entity_id in d.entity_mapping.values())
         ]
-
-        # Check for humidity
-        if "current_humidity" in state.attributes:
-            capabilities.append(AmperaCapability.HUMIDITY)
-
-        return DiscoveredDevice(
-            entity_id=entity_id,
-            name=name,
-            device_type=AmperaDeviceType.CLIMATE,
-            capabilities=capabilities,
-            manufacturer=manufacturer,
-            model=model,
-        )
 
     def get_device_options(self) -> list[dict]:
         """Get devices formatted for config flow selection.
 
         Returns list of dicts with 'value' and 'label' for SelectSelector.
+        Now returns device_id as value (not entity_id).
         """
         devices = self.discover_devices()
 
         return [
             {
-                "value": device.entity_id,
-                "label": f"{device.name} ({device.device_type.value})",
+                "value": device.ha_device_id,
+                "label": f"{device.name} ({device.device_type.value}) - {len(device.capabilities)} sensors",
             }
             for device in devices
         ]
 
-    def get_devices_by_ids(self, entity_ids: list[str]) -> list[DiscoveredDevice]:
-        """Get discovered device info for specific entity IDs."""
+    def get_devices_by_ids(self, device_ids: list[str]) -> list[DiscoveredDevice]:
+        """Get discovered device info for specific device IDs.
+
+        Args:
+            device_ids: List of HA device registry IDs (or orphan pseudo-IDs)
+        """
         all_devices = self.discover_devices()
-        return [d for d in all_devices if d.entity_id in entity_ids]
+        return [d for d in all_devices if d.ha_device_id in device_ids]
