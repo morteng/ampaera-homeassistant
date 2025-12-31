@@ -23,6 +23,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    EntityCategory,
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
     UnitOfEnergy,
@@ -83,12 +84,14 @@ SENSOR_TYPES: tuple[AmperaSensorEntityDescription, ...] = (
         value_fn=lambda data: data.get("spot_price_nok"),
     ),
     # Voltage sensors (optional, controlled by user option)
+    # Marked as DIAGNOSTIC to reduce UI clutter for typical users
     AmperaSensorEntityDescription(
         key="voltage_l1",
         translation_key="voltage_l1",
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
         suggested_display_precision=1,
         value_fn=lambda data: data.get("voltage_l1"),
         requires_option=CONF_ENABLE_VOLTAGE_SENSORS,
@@ -99,6 +102,7 @@ SENSOR_TYPES: tuple[AmperaSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
         suggested_display_precision=1,
         value_fn=lambda data: data.get("voltage_l2"),
         requires_option=CONF_ENABLE_VOLTAGE_SENSORS,
@@ -109,17 +113,20 @@ SENSOR_TYPES: tuple[AmperaSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
         suggested_display_precision=1,
         value_fn=lambda data: data.get("voltage_l3"),
         requires_option=CONF_ENABLE_VOLTAGE_SENSORS,
     ),
     # Current sensors (optional, controlled by user option)
+    # Marked as DIAGNOSTIC to reduce UI clutter for typical users
     AmperaSensorEntityDescription(
         key="current_l1",
         translation_key="current_l1",
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         device_class=SensorDeviceClass.CURRENT,
         state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
         suggested_display_precision=2,
         value_fn=lambda data: data.get("current_l1"),
         requires_option=CONF_ENABLE_VOLTAGE_SENSORS,
@@ -130,6 +137,7 @@ SENSOR_TYPES: tuple[AmperaSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         device_class=SensorDeviceClass.CURRENT,
         state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
         suggested_display_precision=2,
         value_fn=lambda data: data.get("current_l2"),
         requires_option=CONF_ENABLE_VOLTAGE_SENSORS,
@@ -140,6 +148,7 @@ SENSOR_TYPES: tuple[AmperaSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         device_class=SensorDeviceClass.CURRENT,
         state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
         suggested_display_precision=2,
         value_fn=lambda data: data.get("current_l3"),
         requires_option=CONF_ENABLE_VOLTAGE_SENSORS,
@@ -159,12 +168,11 @@ async def async_setup_entry(
 
     entities: list[AmperaSensor] = []
 
-    for site_id, coordinator in coordinators.items():
+    for _site_id, coordinator in coordinators.items():
         for description in SENSOR_TYPES:
             # Check if sensor requires an option to be enabled
-            if description.requires_option:
-                if not options.get(description.requires_option, False):
-                    continue
+            if description.requires_option and not options.get(description.requires_option, False):
+                continue
 
             entities.append(
                 AmperaSensor(

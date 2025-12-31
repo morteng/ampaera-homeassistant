@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from homeassistant.core import ServiceCall
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 
 from .api import AmperaApiClient, AmperaAuthError, AmperaConnectionError
@@ -71,9 +72,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     selected_entities = entry.data.get(CONF_SELECTED_ENTITIES, [])
 
     # Get options with defaults
-    push_interval = entry.options.get(
-        CONF_POLLING_INTERVAL, DEFAULT_POLLING_INTERVAL
-    )
+    push_interval = entry.options.get(CONF_POLLING_INTERVAL, DEFAULT_POLLING_INTERVAL)
     command_poll_interval = entry.options.get(
         CONF_COMMAND_POLL_INTERVAL, DEFAULT_COMMAND_POLL_INTERVAL
     )
@@ -149,6 +148,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Register update listener for options changes
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 
+    # Register services (only once for the domain)
+    await _async_setup_services(hass)
+
     _LOGGER.info(
         "Ampæra integration started for site '%s' (%s) with %d synced devices",
         site_name,
@@ -157,6 +159,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     return True
+
+
+async def _async_setup_services(hass: HomeAssistant) -> None:
+    """Set up Ampæra services."""
+    # Only register services once
+    if hass.services.has_service(DOMAIN, "force_sync"):
+        return
+
+    async def handle_force_sync(call: ServiceCall) -> None:  # noqa: ARG001
+        """Handle force_sync service call."""
+        _LOGGER.info("Force sync requested via service call")
+        for _entry_id, data in hass.data.get(DOMAIN, {}).items():
+            if isinstance(data, dict):
+                sync_service = data.get("device_sync_service")
+                if sync_service:
+                    await sync_service.async_sync_now()
+
+    async def handle_push_telemetry(call: ServiceCall) -> None:  # noqa: ARG001
+        """Handle push_telemetry service call."""
+        _LOGGER.info("Push telemetry requested via service call")
+        for _entry_id, data in hass.data.get(DOMAIN, {}).items():
+            if isinstance(data, dict):
+                push_service = data.get("push_service")
+                if push_service:
+                    await push_service.async_push_now()
+
+    hass.services.async_register(DOMAIN, "force_sync", handle_force_sync)
+    hass.services.async_register(DOMAIN, "push_telemetry", handle_push_telemetry)
 
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -172,25 +202,19 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     # Update push service debounce interval
     push_service: AmperaTelemetryPushService = data.get("push_service")
     if push_service:
-        new_interval = entry.options.get(
-            CONF_POLLING_INTERVAL, DEFAULT_POLLING_INTERVAL
-        )
+        new_interval = entry.options.get(CONF_POLLING_INTERVAL, DEFAULT_POLLING_INTERVAL)
         push_service._debounce_seconds = float(new_interval)
 
     # Update command service poll interval
     command_service: AmperaCommandService = data.get("command_service")
     if command_service:
-        new_interval = entry.options.get(
-            CONF_COMMAND_POLL_INTERVAL, DEFAULT_COMMAND_POLL_INTERVAL
-        )
+        new_interval = entry.options.get(CONF_COMMAND_POLL_INTERVAL, DEFAULT_COMMAND_POLL_INTERVAL)
         command_service.set_poll_interval(new_interval)
 
     # Update device sync service interval
     device_sync_service: AmperaDeviceSyncService = data.get("device_sync_service")
     if device_sync_service:
-        new_interval = entry.options.get(
-            CONF_DEVICE_SYNC_INTERVAL, DEFAULT_DEVICE_SYNC_INTERVAL
-        )
+        new_interval = entry.options.get(CONF_DEVICE_SYNC_INTERVAL, DEFAULT_DEVICE_SYNC_INTERVAL)
         device_sync_service.set_sync_interval(new_interval)
 
     _LOGGER.info("Ampæra options updated")

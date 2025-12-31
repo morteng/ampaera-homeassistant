@@ -203,6 +203,33 @@ class AmperaTelemetryPushService:
 
         self._running = False
 
+    async def async_push_now(self) -> None:
+        """Trigger an immediate telemetry push (for service call).
+
+        Collects current states from all tracked entities and pushes immediately.
+        """
+        _LOGGER.info("Manual telemetry push triggered")
+
+        if not self._entity_mappings:
+            _LOGGER.warning("No entities to push")
+            return
+
+        # Collect current states
+        for entity_id, mapping in self._entity_mappings.items():
+            state = self._hass.states.get(entity_id)
+            if state and state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                reading = self._format_reading(entity_id, state, mapping)
+                if reading:
+                    async with self._pending_lock:
+                        if mapping.device_id not in self._pending_readings:
+                            self._pending_readings[mapping.device_id] = {
+                                "device_id": mapping.device_id
+                            }
+                        self._pending_readings[mapping.device_id].update(reading)
+
+        # Push immediately
+        await self._flush_pending()
+
     async def _push_initial_states(self) -> None:
         """Push current states of all tracked entities."""
         for entity_id, mapping in self._entity_mappings.items():

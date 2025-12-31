@@ -1,0 +1,14 @@
+# Services for Ampaera Energy integration
+# These services allow users to manually trigger sync and telemetry operations
+
+force_sync:
+  name: Force device sync
+  description: >-
+    Immediately synchronize all Home Assistant devices with the Ampaera cloud.
+    This is useful after adding new devices or if sync appears out of date.
+
+push_telemetry:
+  name: Push telemetry
+  description: >-
+    Immediately push current telemetry data to the Ampaera cloud.
+    Useful for ensuring the latest readings are available in the Ampaera dashboard.

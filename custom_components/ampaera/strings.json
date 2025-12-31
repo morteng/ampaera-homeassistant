@@ -2,22 +2,31 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect to Ampæra",
-        "description": "Enter your API key from Settings → API in the Ampæra web app.",
+        "title": "Connect to Ampaera",
+        "description": "Enter your API key from Settings > API in the Ampaera web app. Leave API URL empty to use production ({default_url}).",
         "data": {
-          "api_key": "API Key"
+          "api_key": "API Key",
+          "api_url": "API URL (optional, for development)"
         }
       },
-      "sites": {
-        "title": "Select Sites",
-        "description": "Choose which sites to add to Home Assistant.",
+      "location": {
+        "title": "Configure Site",
+        "description": "Set your site name and select your electricity grid region for accurate spot pricing.",
         "data": {
-          "site_ids": "Sites"
+          "site_name": "Site name",
+          "grid_region": "Grid region"
+        }
+      },
+      "devices": {
+        "title": "Select Devices",
+        "description": "Choose which Home Assistant devices to sync with Ampaera. Found {device_count} compatible devices.",
+        "data": {
+          "selected_entities": "Devices to sync"
         }
       },
       "reauth_confirm": {
-        "title": "Reauthenticate Ampæra",
-        "description": "Your API key for {site_name} has expired. Please enter a new API key.",
+        "title": "Reauthenticate Ampaera",
+        "description": "Your API key has expired. Please enter a new API key.",
         "data": {
           "api_key": "API Key"
         }
@@ -25,24 +34,27 @@
     },
     "error": {
       "invalid_auth": "Invalid API key",
-      "cannot_connect": "Cannot connect to Ampæra",
-      "no_sites": "No sites found for this API key",
-      "no_sites_selected": "Please select at least one site",
+      "cannot_connect": "Cannot connect to Ampaera",
+      "no_devices_found": "No compatible devices found in Home Assistant",
+      "no_devices_selected": "Please select at least one device",
+      "registration_failed": "Failed to register with Ampaera",
       "unknown": "An unexpected error occurred"
     },
     "abort": {
-      "already_configured": "This site is already configured",
+      "already_configured": "This Home Assistant instance is already configured",
       "reauth_successful": "Reauthentication successful"
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Ampæra Settings",
+        "title": "Ampaera Settings",
+        "description": "Configure how the integration syncs with Ampaera.",
         "data": {
-          "polling_interval": "Update interval (seconds)",
-          "enable_sse": "Enable real-time updates",
-          "enable_voltage_sensors": "Show voltage sensors"
+          "polling_interval": "Telemetry push interval (seconds)",
+          "command_poll_interval": "Command poll interval (seconds)",
+          "device_sync_interval": "Device sync interval (seconds)",
+          "enable_voltage_sensors": "Include voltage sensors in telemetry"
         }
       }
     }
@@ -100,6 +112,16 @@
       "charging": {
         "name": "Charging"
       }
+    }
+  },
+  "services": {
+    "force_sync": {
+      "name": "Force device sync",
+      "description": "Immediately synchronize all devices with Ampaera cloud."
+    },
+    "push_telemetry": {
+      "name": "Push telemetry",
+      "description": "Immediately push current telemetry to Ampaera cloud."
     }
   }
 }

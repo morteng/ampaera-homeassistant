@@ -145,6 +145,17 @@ class AmperaDeviceSyncService:
 
         _LOGGER.debug("Device sync interval updated to %ds", interval)
 
+    async def async_sync_now(self) -> None:
+        """Trigger an immediate device sync (for service call)."""
+        _LOGGER.info("Manual device sync triggered")
+        # Temporarily set running to allow sync
+        was_running = self._running
+        self._running = True
+        try:
+            await self._sync_devices()
+        finally:
+            self._running = was_running
+
     @callback
     def _sync_devices_callback(self, _now: Event | None = None) -> None:
         """Callback for scheduled sync (wraps async method)."""
