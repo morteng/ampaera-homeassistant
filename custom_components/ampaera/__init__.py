@@ -29,7 +29,6 @@ from .const import (
     CONF_API_KEY,
     CONF_API_URL,
     CONF_COMMAND_POLL_INTERVAL,
-    CONF_DEVICE_MAPPINGS,
     CONF_DEVICE_SYNC_INTERVAL,
     CONF_POLLING_INTERVAL,
     CONF_SELECTED_ENTITIES,
@@ -68,7 +67,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     api_url = entry.data.get(CONF_API_URL, DEFAULT_API_BASE_URL)
     site_id = entry.data[CONF_SITE_ID]
     site_name = entry.data.get(CONF_SITE_NAME, "Home")
-    device_mappings = entry.data.get(CONF_DEVICE_MAPPINGS, {})
     selected_entities = entry.data.get(CONF_SELECTED_ENTITIES, [])
 
     # Get options with defaults
@@ -98,40 +96,59 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await api.close()
         raise ConfigEntryNotReady(f"Cannot connect to Ampæra: {err}") from err
 
-    # Create telemetry push service
-    push_service = AmperaTelemetryPushService(
-        hass=hass,
-        api_client=api,
-        site_id=site_id,
-        device_mappings=device_mappings,
-        debounce_seconds=float(push_interval),
-    )
-
-    # Create command polling service
-    command_service = AmperaCommandService(
-        hass=hass,
-        api_client=api,
-        site_id=site_id,
-        device_mappings=device_mappings,
-        poll_interval=command_poll_interval,
-    )
-
     # Create device sync service (keeps devices in sync with Ampæra)
+    # This MUST be created and started first to build entity_mappings
+    # Note: selected_entities actually contains device IDs (confusing legacy naming)
     device_sync_service = AmperaDeviceSyncService(
         hass=hass,
         entry=entry,
         api_client=api,
         site_id=site_id,
-        selected_entities=selected_entities,
+        selected_device_ids=selected_entities,
         sync_interval=device_sync_interval,
     )
 
-    # Start services
+    # Start device sync first to discover devices and build entity mappings
     try:
-        await device_sync_service.async_start()  # Sync devices first
+        await device_sync_service.async_start()
+    except Exception as err:
+        await api.close()
+        raise ConfigEntryNotReady(f"Failed to start device sync: {err}") from err
+
+    # Get entity mappings from device sync service (built during initial sync)
+    device_id_mappings = device_sync_service.device_id_mappings
+    entity_mappings = device_sync_service.entity_mappings
+
+    _LOGGER.debug(
+        "Device sync completed: %d devices, %d entities",
+        len(device_id_mappings),
+        len(entity_mappings),
+    )
+
+    # Create telemetry push service with entity mappings from device sync
+    push_service = AmperaTelemetryPushService(
+        hass=hass,
+        api_client=api,
+        site_id=site_id,
+        entity_mappings=entity_mappings,
+        debounce_seconds=float(push_interval),
+    )
+
+    # Create command polling service (uses device_id_mappings for command routing)
+    command_service = AmperaCommandService(
+        hass=hass,
+        api_client=api,
+        site_id=site_id,
+        device_mappings=device_id_mappings,
+        poll_interval=command_poll_interval,
+    )
+
+    # Start remaining services
+    try:
         await push_service.async_start()
         await command_service.async_start()
     except Exception as err:
+        await device_sync_service.async_stop()
         await api.close()
         raise ConfigEntryNotReady(f"Failed to start services: {err}") from err
 
@@ -152,10 +169,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await _async_setup_services(hass)
 
     _LOGGER.info(
-        "Ampæra integration started for site '%s' (%s) with %d synced devices",
+        "Ampæra integration started for site '%s' (%s) with %d devices, %d entities",
         site_name,
         site_id,
-        len(device_mappings),
+        len(device_id_mappings),
+        len(entity_mappings),
     )
 
     return True
