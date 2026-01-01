@@ -314,22 +314,12 @@ class AmperaDeviceDiscovery:
             if device:
                 devices.append(device)
 
-        # Step 3: Handle orphan entities (create one device per entity)
-        for state in orphan_entities:
-            capability, device_class = self._analyze_entity_capability(state)
-            if capability and device_class:
-                # Create a pseudo device_id from entity_id
-                pseudo_device_id = f"orphan_{state.entity_id}"
-                friendly_name = state.attributes.get("friendly_name", state.entity_id)
-
-                device = DiscoveredDevice(
-                    ha_device_id=pseudo_device_id,
-                    name=friendly_name,
-                    device_type=AmperaDeviceType.SENSOR,
-                    capabilities=[capability],
-                    entity_mapping={capability.value: state.entity_id},
-                    primary_entity_id=state.entity_id,
-                )
+        # Step 3: Handle orphan entities - GROUP by type instead of individual devices
+        # This creates virtual parent devices for orphan sensors of the same type
+        orphan_groups = self._group_orphan_entities(orphan_entities)
+        for group_id, orphan_group in orphan_groups.items():
+            device = self._build_orphan_group_device(group_id, orphan_group)
+            if device:
                 devices.append(device)
 
         _LOGGER.info(
@@ -391,6 +381,120 @@ class AmperaDeviceDiscovery:
             primary_entity_id=primary_entity_id,
             manufacturer=manufacturer,
             model=model,
+        )
+
+    def _group_orphan_entities(
+        self, orphan_entities: list[State]
+    ) -> dict[str, list[tuple[State, AmperaCapability]]]:
+        """Group orphan entities by their logical type for consolidation.
+
+        Groups orphan entities that should belong together:
+        - All power/energy sensors → "power_meter" group
+        - All water_heater entities → "water_heater" group
+        - All switch entities → by switch name prefix
+        - All climate entities → "climate" group
+
+        Returns:
+            Dict of group_id → list of (state, capability) tuples
+        """
+        groups: dict[str, list[tuple[State, AmperaCapability]]] = {}
+
+        for state in orphan_entities:
+            capability, device_class = self._analyze_entity_capability(state)
+            if not capability:
+                continue
+
+            entity_id = state.entity_id
+            domain = entity_id.split(".")[0]
+            friendly_name = state.attributes.get("friendly_name", entity_id).lower()
+
+            # Determine group based on domain and device class
+            if domain == "sensor" and device_class in ("power", "energy", "voltage", "current"):
+                # Group all power/energy sensors together as a power meter
+                group_id = "virtual_power_meter"
+            elif domain == "water_heater":
+                group_id = "virtual_water_heater"
+            elif domain == "climate":
+                group_id = "virtual_climate"
+            elif domain == "switch":
+                # Try to group switches by name prefix (e.g., "living_room_")
+                name_parts = entity_id.split(".")[1].split("_")
+                if len(name_parts) >= 2:
+                    group_id = f"virtual_switch_{name_parts[0]}"
+                else:
+                    group_id = f"virtual_switch_{entity_id}"
+            else:
+                # Individual orphan - keep as separate device
+                group_id = f"orphan_{entity_id}"
+
+            groups.setdefault(group_id, []).append((state, capability))
+
+        return groups
+
+    def _build_orphan_group_device(
+        self, group_id: str, entities: list[tuple[State, AmperaCapability]]
+    ) -> DiscoveredDevice | None:
+        """Build a DiscoveredDevice from a group of orphan entities.
+
+        Creates a virtual parent device for grouped orphan entities.
+        """
+        if not entities:
+            return None
+
+        # Collect all capabilities and entity mappings
+        capabilities: list[AmperaCapability] = []
+        entity_mapping: dict[str, str] = {}
+        primary_entity_id: str = ""
+
+        for state, capability in entities:
+            if capability not in capabilities:
+                capabilities.append(capability)
+                entity_mapping[capability.value] = state.entity_id
+
+            # Set primary entity (prefer power sensor)
+            if not primary_entity_id or capability == AmperaCapability.POWER:
+                primary_entity_id = state.entity_id
+
+        if not capabilities:
+            return None
+
+        # Determine device type and name based on group
+        if group_id == "virtual_power_meter":
+            device_type = AmperaDeviceType.POWER_METER
+            name = "Power Meter"
+            # Check entity names for better naming
+            for state, _ in entities:
+                friendly_name = state.attributes.get("friendly_name", "")
+                if friendly_name:
+                    # Use first entity's name as base
+                    name = friendly_name.replace("Power", "").replace("Energy", "").strip()
+                    if not name:
+                        name = "Power Meter"
+                    else:
+                        name = f"{name} Power Meter"
+                    break
+        elif group_id == "virtual_water_heater":
+            device_type = AmperaDeviceType.WATER_HEATER
+            name = "Water Heater"
+        elif group_id == "virtual_climate":
+            device_type = AmperaDeviceType.CLIMATE
+            name = "Climate Control"
+        elif group_id.startswith("virtual_switch_"):
+            device_type = AmperaDeviceType.SWITCH
+            name = group_id.replace("virtual_switch_", "").replace("_", " ").title()
+        else:
+            # Single orphan entity
+            device_type = AmperaDeviceType.SENSOR
+            state, _ = entities[0]
+            name = state.attributes.get("friendly_name", state.entity_id)
+
+        return DiscoveredDevice(
+            ha_device_id=group_id,
+            name=name,
+            device_type=device_type,
+            capabilities=capabilities,
+            entity_mapping=entity_mapping,
+            primary_entity_id=primary_entity_id,
         )
 
     def discover_by_domain(self, domain: str) -> list[DiscoveredDevice]:
