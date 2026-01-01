@@ -40,7 +40,10 @@ class AmperaDeviceType(str, Enum):
 class AmperaCapability(str, Enum):
     """Capabilities a device can have."""
 
-    POWER = "power"
+    POWER = "power"  # Total power (preferred for primary entity)
+    POWER_L1 = "power_l1"  # Phase-specific power
+    POWER_L2 = "power_l2"
+    POWER_L3 = "power_l3"
     ENERGY = "energy"
     ENERGY_IMPORT = "energy_import"
     ENERGY_EXPORT = "energy_export"
@@ -110,7 +113,93 @@ SUPPORTED_DOMAINS = {
     "climate",
 }
 
-# Keywords to identify device types from device/entity names
+# =============================================================================
+# Norwegian Market Integration Detection
+# =============================================================================
+# Known HA integrations popular in Norway, mapped to device types.
+# The integration platform name is checked against entity.platform attribute.
+
+KNOWN_EV_CHARGER_INTEGRATIONS = {
+    # Norwegian market leaders
+    "easee": "Easee",           # Most popular in Norway
+    "zaptec": "Zaptec",         # Strong in Norway
+    "garo": "GARO",             # Swedish, popular in Nordics
+    # European/International
+    "wallbox": "Wallbox",
+    "ocpp": "OCPP",             # Open Charge Point Protocol
+    "tesla_wall_connector": "Tesla Wall Connector",
+    "ohme": "Ohme",
+    "myenergi": "myenergi zappi",
+    "hypervolt": "Hypervolt",
+    "go_echarger": "go-e Charger",
+    "evbox": "EVBox",
+    "charge_amps": "Charge Amps",
+    "alfen": "Alfen",
+}
+
+KNOWN_WATER_HEATER_INTEGRATIONS = {
+    # Norwegian market
+    "ouman": "Ouman",           # Finnish, popular in Nordics
+    "sensibo": "Sensibo",       # Can control water heaters
+    "mill": "Mill",             # Norwegian brand
+    # Generic
+    "generic_thermostat": "Generic Thermostat",
+    "aquanta": "Aquanta",
+    "rheem": "Rheem",
+    "ao_smith": "A.O. Smith",
+}
+
+KNOWN_POWER_METER_INTEGRATIONS = {
+    # Norwegian AMS/HAN integrations
+    "tibber": "Tibber",         # Tibber Pulse
+    "elvia": "Elvia",           # Local utility
+    "amshan": "AMS/HAN",        # Generic AMS reader
+    "p1_monitor": "P1 Monitor",
+    # International
+    "shelly": "Shelly",
+    "tasmota": "Tasmota",
+    "tuya": "Tuya",
+    "sonoff": "Sonoff",
+}
+
+# =============================================================================
+# Semantic Signal Detection
+# =============================================================================
+# Entity name patterns that indicate specific device types, ordered by specificity.
+# These are checked when integration detection fails.
+
+EV_CHARGER_SIGNALS = {
+    # High confidence (unique to chargers)
+    "session_energy", "charging_power", "charging_current", "charging_status",
+    "cable_connected", "cable_locked", "charger_status", "ev_connected",
+    "max_charging_current", "dynamic_charger_limit", "pilot_level",
+    # Medium confidence
+    "charger", "lader", "elbil", "ev_",
+}
+
+WATER_HEATER_SIGNALS = {
+    # High confidence (unique to water heaters)
+    "tank_temperature", "water_temperature", "hot_water", "legionella",
+    "away_mode_temperature", "boost_mode", "heating_state",
+    # Medium confidence
+    "varmtvann", "bereder", "boiler", "water_heater",
+}
+
+AMS_POWER_METER_SIGNALS = {
+    # High confidence (unique to AMS meters)
+    "active_power_import", "active_power_export", "reactive_power",
+    "voltage_l1", "voltage_l2", "voltage_l3",
+    "current_l1", "current_l2", "current_l3",
+    "accumulated_consumption", "meter_id", "obis",
+    # Medium confidence
+    "ams", "han", "strømmåler", "power_consumption",
+}
+
+# =============================================================================
+# Keywords (fallback detection)
+# =============================================================================
+# Used when both integration and signal detection fail.
+
 EV_CHARGER_KEYWORDS = {"charger", "ev", "easee", "zaptec", "wallbox", "lader", "elbil"}
 AMS_KEYWORDS = {"ams", "han", "meter", "strømmåler", "power consumption"}
 WATER_HEATER_KEYWORDS = {"water heater", "varmtvannsbereder", "boiler", "hot water"}
@@ -166,6 +255,113 @@ class AmperaDeviceDiscovery:
         name = device_entry.name_by_user or device_entry.name
         return name, device_entry.manufacturer, device_entry.model
 
+    def _get_entity_platform(self, entity_id: str) -> str | None:
+        """Get the integration platform name for an entity.
+
+        This is the integration that created the entity (e.g., 'easee', 'zaptec', 'tibber').
+        Used for known-integration detection.
+        """
+        self._ensure_registries()
+        assert self._entity_registry is not None
+
+        entity_entry = self._entity_registry.async_get(entity_id)
+        if entity_entry is None:
+            return None
+
+        return entity_entry.platform
+
+    def _detect_device_type_from_integration(
+        self, entities: list[State]
+    ) -> AmperaDeviceType | None:
+        """Detect device type from known integration platforms.
+
+        This is the most reliable detection method - if an entity comes from
+        a known integration (e.g., 'easee', 'zaptec'), we can confidently
+        classify the device.
+
+        Returns:
+            Device type if detected from known integration, None otherwise.
+        """
+        for state in entities:
+            platform = self._get_entity_platform(state.entity_id)
+            if not platform:
+                continue
+
+            platform_lower = platform.lower()
+
+            # Check EV charger integrations
+            if platform_lower in KNOWN_EV_CHARGER_INTEGRATIONS:
+                _LOGGER.debug(
+                    "Detected EV charger from integration: %s (%s)",
+                    platform,
+                    KNOWN_EV_CHARGER_INTEGRATIONS[platform_lower],
+                )
+                return AmperaDeviceType.EV_CHARGER
+
+            # Check water heater integrations
+            if platform_lower in KNOWN_WATER_HEATER_INTEGRATIONS:
+                _LOGGER.debug(
+                    "Detected water heater from integration: %s (%s)",
+                    platform,
+                    KNOWN_WATER_HEATER_INTEGRATIONS[platform_lower],
+                )
+                return AmperaDeviceType.WATER_HEATER
+
+            # Check power meter integrations
+            if platform_lower in KNOWN_POWER_METER_INTEGRATIONS:
+                _LOGGER.debug(
+                    "Detected power meter from integration: %s (%s)",
+                    platform,
+                    KNOWN_POWER_METER_INTEGRATIONS[platform_lower],
+                )
+                return AmperaDeviceType.POWER_METER
+
+        return None
+
+    def _detect_device_type_from_signals(
+        self, entities: list[State]
+    ) -> AmperaDeviceType | None:
+        """Detect device type from semantic entity name signals.
+
+        Checks entity names and friendly names for patterns that indicate
+        specific device types. More robust than simple keyword matching.
+
+        Returns:
+            Device type if detected from signals, None otherwise.
+        """
+        # Collect all searchable text from entities
+        all_names: list[str] = []
+        for state in entities:
+            entity_id = state.entity_id
+            entity_name = entity_id.split(".")[1].lower()
+            friendly_name = state.attributes.get("friendly_name", "").lower()
+            all_names.extend([entity_name, friendly_name])
+
+        all_text = " ".join(all_names)
+
+        # Count signal matches for each type
+        ev_charger_matches = sum(1 for sig in EV_CHARGER_SIGNALS if sig in all_text)
+        water_heater_matches = sum(1 for sig in WATER_HEATER_SIGNALS if sig in all_text)
+        ams_meter_matches = sum(1 for sig in AMS_POWER_METER_SIGNALS if sig in all_text)
+
+        # Return type with most matches (threshold: at least 2 matches)
+        matches = [
+            (ev_charger_matches, AmperaDeviceType.EV_CHARGER),
+            (water_heater_matches, AmperaDeviceType.WATER_HEATER),
+            (ams_meter_matches, AmperaDeviceType.POWER_METER),
+        ]
+        best_match = max(matches, key=lambda x: x[0])
+
+        if best_match[0] >= 2:
+            _LOGGER.debug(
+                "Detected %s from signals (%d matches)",
+                best_match[1].value,
+                best_match[0],
+            )
+            return best_match[1]
+
+        return None
+
     def _determine_device_type(
         self,
         device_name: str | None,
@@ -174,8 +370,24 @@ class AmperaDeviceDiscovery:
     ) -> AmperaDeviceType:
         """Determine the Ampæra device type based on device info and entities.
 
-        Uses device name, manufacturer, and entity characteristics to classify.
+        Uses a three-tier detection hierarchy:
+        1. Known integration detection (most reliable) - e.g., 'easee', 'zaptec'
+        2. Semantic signal matching - entity name patterns like 'session_energy'
+        3. Keyword matching (fallback) - simple text search
+
+        This approach prioritizes specificity and reduces false positives.
         """
+        # Tier 1: Known integration detection (most reliable)
+        device_type = self._detect_device_type_from_integration(entities)
+        if device_type:
+            return device_type
+
+        # Tier 2: Semantic signal detection
+        device_type = self._detect_device_type_from_signals(entities)
+        if device_type:
+            return device_type
+
+        # Tier 3: Keyword-based detection (fallback)
         # Build searchable text from device name, manufacturer, and entity names
         search_text = " ".join(
             filter(
@@ -184,11 +396,12 @@ class AmperaDeviceDiscovery:
                     device_name,
                     manufacturer,
                     *[e.attributes.get("friendly_name", "") for e in entities],
+                    *[e.entity_id.split(".")[1] for e in entities],
                 ],
             )
         ).lower()
 
-        # Check for EV charger
+        # Check for EV charger keywords
         if any(kw in search_text for kw in EV_CHARGER_KEYWORDS):
             return AmperaDeviceType.EV_CHARGER
 
@@ -198,15 +411,15 @@ class AmperaDeviceDiscovery:
         if any(kw in search_text for kw in WATER_HEATER_KEYWORDS):
             return AmperaDeviceType.WATER_HEATER
 
-        # Check for AMS/power meter
+        # Check for AMS/power meter keywords
         if any(kw in search_text for kw in AMS_KEYWORDS):
             return AmperaDeviceType.POWER_METER
 
-        # Check for climate
+        # Check for climate domain
         if any(e.entity_id.startswith("climate.") for e in entities):
             return AmperaDeviceType.CLIMATE
 
-        # Check for switch
+        # Check for switch domain
         if any(e.entity_id.startswith("switch.") for e in entities):
             return AmperaDeviceType.SWITCH
 
@@ -235,6 +448,15 @@ class AmperaDeviceDiscovery:
         # Sensor domain
         if domain == "sensor":
             if device_class == "power":
+                # Check for phase-specific power sensors
+                # Phase indicators: l1, l2, l3, phase 1, phase 2, phase 3
+                if "l1" in friendly_name or "phase 1" in friendly_name:
+                    return AmperaCapability.POWER_L1, device_class
+                elif "l2" in friendly_name or "phase 2" in friendly_name:
+                    return AmperaCapability.POWER_L2, device_class
+                elif "l3" in friendly_name or "phase 3" in friendly_name:
+                    return AmperaCapability.POWER_L3, device_class
+                # Total power (no phase indicator) - this is preferred
                 return AmperaCapability.POWER, device_class
             elif device_class == "energy":
                 # Check if it's import/export or session energy
@@ -352,6 +574,10 @@ class AmperaDeviceDiscovery:
         entity_mapping: dict[str, str] = {}
         primary_entity_id: str = ""
 
+        # Track power entities for primary selection
+        best_power_entity: str = ""
+        best_consumption_entity: str = ""
+
         for state in entities:
             capability, device_class = self._analyze_entity_capability(state)
             if capability:
@@ -360,9 +586,25 @@ class AmperaDeviceDiscovery:
                     capabilities.append(capability)
                     entity_mapping[capability.value] = state.entity_id
 
-                # Set primary entity (prefer power sensor, then first entity)
-                if not primary_entity_id or device_class == "power":
-                    primary_entity_id = state.entity_id
+                # Track power entities for primary selection
+                if capability == AmperaCapability.POWER:
+                    friendly_name = state.attributes.get("friendly_name", "").lower()
+                    entity_id_lower = state.entity_id.lower()
+                    # Prefer "consumption" or "total" entities as they represent total power
+                    if "consumption" in friendly_name or "consumption" in entity_id_lower:
+                        best_consumption_entity = state.entity_id
+                    elif "total" in friendly_name or "total" in entity_id_lower:
+                        best_consumption_entity = state.entity_id
+                    elif not best_power_entity:
+                        best_power_entity = state.entity_id
+
+        # Select primary: prefer consumption > any power > first entity
+        if best_consumption_entity:
+            primary_entity_id = best_consumption_entity
+        elif best_power_entity:
+            primary_entity_id = best_power_entity
+        elif entities:
+            primary_entity_id = entities[0].entity_id
 
         # Skip devices with no relevant capabilities
         if not capabilities:
@@ -383,16 +625,91 @@ class AmperaDeviceDiscovery:
             model=model,
         )
 
+    def _detect_orphan_device_type(
+        self, state: State, device_class: str | None
+    ) -> str:
+        """Detect device type for an orphan entity using smart detection.
+
+        Uses the same hierarchical detection as parent devices:
+        1. Integration platform detection
+        2. Semantic signal matching
+        3. Keyword matching
+
+        Returns group_id for the entity.
+        """
+        entity_id = state.entity_id
+        domain = entity_id.split(".")[0]
+        entity_name = entity_id.split(".")[1].lower()
+        friendly_name = state.attributes.get("friendly_name", "").lower()
+
+        # Tier 1: Check integration platform
+        platform = self._get_entity_platform(entity_id)
+        if platform:
+            platform_lower = platform.lower()
+            if platform_lower in KNOWN_EV_CHARGER_INTEGRATIONS:
+                return "virtual_ev_charger"
+            if platform_lower in KNOWN_WATER_HEATER_INTEGRATIONS:
+                return "virtual_water_heater"
+            if platform_lower in KNOWN_POWER_METER_INTEGRATIONS:
+                return "virtual_power_meter"
+
+        # Tier 2: Semantic signal matching
+        search_text = f"{entity_name} {friendly_name}"
+
+        # Count signal matches
+        ev_matches = sum(1 for sig in EV_CHARGER_SIGNALS if sig in search_text)
+        wh_matches = sum(1 for sig in WATER_HEATER_SIGNALS if sig in search_text)
+        ams_matches = sum(1 for sig in AMS_POWER_METER_SIGNALS if sig in search_text)
+
+        # If strong signal match (2+), use that type
+        if ev_matches >= 2:
+            return "virtual_ev_charger"
+        if wh_matches >= 2:
+            return "virtual_water_heater"
+        if ams_matches >= 2:
+            return "virtual_power_meter"
+
+        # Tier 3: Keyword matching for single matches
+        # EV charger detection
+        for kw in EV_CHARGER_KEYWORDS:
+            if kw in search_text:
+                return "virtual_ev_charger"
+
+        # Water heater detection
+        for kw in WATER_HEATER_KEYWORDS:
+            if kw in search_text:
+                return "virtual_water_heater"
+
+        # Domain-based detection
+        if domain == "water_heater":
+            return "virtual_water_heater"
+
+        # For power/energy sensors without specific signals, default to power meter
+        if device_class in ("power", "energy", "voltage", "current"):
+            return "virtual_power_meter"
+
+        # Temperature sensors need more context
+        if device_class == "temperature":
+            # Check if water heater related
+            if any(kw in search_text for kw in WATER_HEATER_KEYWORDS):
+                return "virtual_water_heater"
+            # Otherwise standalone
+            return f"orphan_{entity_id}"
+
+        return f"orphan_{entity_id}"
+
     def _group_orphan_entities(
         self, orphan_entities: list[State]
     ) -> dict[str, list[tuple[State, AmperaCapability]]]:
         """Group orphan entities by their logical type for consolidation.
 
-        Groups orphan entities that should belong together:
-        - All power/energy sensors → "power_meter" group
-        - All water_heater entities → "water_heater" group
-        - All switch entities → by switch name prefix
-        - All climate entities → "climate" group
+        Uses smart device type detection (integration → signals → keywords)
+        to group orphan entities that should belong together:
+        - EV charger sensors → "virtual_ev_charger" group
+        - Water heater sensors → "virtual_water_heater" group
+        - AMS/power meter sensors → "virtual_power_meter" group
+        - Climate entities → "virtual_climate" group
+        - Switch entities → grouped by name prefix
 
         Returns:
             Dict of group_id → list of (state, capability) tuples
@@ -406,12 +723,10 @@ class AmperaDeviceDiscovery:
 
             entity_id = state.entity_id
             domain = entity_id.split(".")[0]
-            friendly_name = state.attributes.get("friendly_name", entity_id).lower()
 
-            # Determine group based on domain and device class
-            if domain == "sensor" and device_class in ("power", "energy", "voltage", "current"):
-                # Group all power/energy sensors together as a power meter
-                group_id = "virtual_power_meter"
+            # Use smart detection for sensors
+            if domain == "sensor":
+                group_id = self._detect_orphan_device_type(state, device_class)
             elif domain == "water_heater":
                 group_id = "virtual_water_heater"
             elif domain == "climate":
@@ -446,14 +761,35 @@ class AmperaDeviceDiscovery:
         entity_mapping: dict[str, str] = {}
         primary_entity_id: str = ""
 
+        # First pass: find the best primary entity
+        # Prefer: 1) "consumption" or "total" in name 2) any POWER capability
+        best_power_entity: str = ""
+        best_consumption_entity: str = ""
+
         for state, capability in entities:
             if capability not in capabilities:
                 capabilities.append(capability)
                 entity_mapping[capability.value] = state.entity_id
 
-            # Set primary entity (prefer power sensor)
-            if not primary_entity_id or capability == AmperaCapability.POWER:
-                primary_entity_id = state.entity_id
+            # Track power entities for primary selection
+            if capability == AmperaCapability.POWER:
+                friendly_name = state.attributes.get("friendly_name", "").lower()
+                entity_id_lower = state.entity_id.lower()
+                # Prefer "consumption" or "total" entities as they represent total power
+                if "consumption" in friendly_name or "consumption" in entity_id_lower:
+                    best_consumption_entity = state.entity_id
+                elif "total" in friendly_name or "total" in entity_id_lower:
+                    best_consumption_entity = state.entity_id
+                elif not best_power_entity:
+                    best_power_entity = state.entity_id
+
+        # Select primary: prefer consumption > any power > first entity
+        if best_consumption_entity:
+            primary_entity_id = best_consumption_entity
+        elif best_power_entity:
+            primary_entity_id = best_power_entity
+        elif entities:
+            primary_entity_id = entities[0][0].entity_id
 
         if not capabilities:
             return None
@@ -476,6 +812,9 @@ class AmperaDeviceDiscovery:
         elif group_id == "virtual_water_heater":
             device_type = AmperaDeviceType.WATER_HEATER
             name = "Water Heater"
+        elif group_id == "virtual_ev_charger":
+            device_type = AmperaDeviceType.EV_CHARGER
+            name = "EV Charger"
         elif group_id == "virtual_climate":
             device_type = AmperaDeviceType.CLIMATE
             name = "Climate Control"

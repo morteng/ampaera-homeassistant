@@ -41,6 +41,7 @@ from .const import (
     CONF_API_KEY,
     CONF_API_URL,
     CONF_COMMAND_POLL_INTERVAL,
+    CONF_DEV_MODE,
     CONF_DEVICE_MAPPINGS,
     CONF_DEVICE_SYNC_INTERVAL,
     CONF_ENABLE_VOLTAGE_SENSORS,
@@ -218,17 +219,17 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
                 description_placeholders={"device_count": "0"},
             )
 
-        # Build device options
+        # Build device options (use ha_device_id for device-based selection)
         device_options = [
             SelectOptionDict(
-                value=device.entity_id,
-                label=f"{device.name} ({device.device_type.value})",
+                value=device.ha_device_id,
+                label=f"{device.name} ({device.device_type.value}) - {len(device.capabilities)} sensors",
             )
             for device in self._discovered_devices
         ]
 
         # Pre-select all devices by default
-        default_selection = [d.entity_id for d in self._discovered_devices]
+        default_selection = [d.ha_device_id for d in self._discovered_devices]
 
         return self.async_show_form(
             step_id="devices",
@@ -391,6 +392,7 @@ class AmperaOptionsFlow(OptionsFlow):
     - Telemetry push interval
     - Command polling interval
     - Voltage sensor visibility
+    - Developer mode (simulation dashboard)
     """
 
     # Note: config_entry is provided by the base OptionsFlow class
@@ -433,6 +435,10 @@ class AmperaOptionsFlow(OptionsFlow):
                         default=current_options.get(
                             CONF_ENABLE_VOLTAGE_SENSORS, False
                         ),
+                    ): bool,
+                    vol.Optional(
+                        CONF_DEV_MODE,
+                        default=current_options.get(CONF_DEV_MODE, False),
                     ): bool,
                 }
             ),

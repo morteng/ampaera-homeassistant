@@ -1,8 +1,37 @@
 """Constants for the Ampæra Energy integration."""
 
+import json
+from pathlib import Path
 from typing import Final
 
 DOMAIN: Final = "ampaera"
+
+
+def _get_integration_version() -> str:
+    """Read version from VERSION file or manifest.json fallback.
+
+    VERSION file is the source of truth for releases.
+    manifest.json uses 0.0.0 placeholder that gets replaced during publish.
+    """
+    try:
+        # Try VERSION file first (in integrations/homeassistant/)
+        version_path = Path(__file__).parent.parent.parent.parent / "VERSION"
+        if version_path.exists():
+            return version_path.read_text().strip()
+
+        # Fall back to manifest.json (for installed copies via HACS)
+        manifest_path = Path(__file__).parent / "manifest.json"
+        manifest = json.loads(manifest_path.read_text())
+        version = manifest.get("version", "unknown")
+        # Don't return placeholder
+        if version == "0.0.0":
+            return "dev"
+        return version
+    except Exception:
+        return "unknown"
+
+
+INTEGRATION_VERSION: Final = _get_integration_version()
 
 # Configuration - Authentication
 CONF_API_KEY: Final = "api_key"
@@ -22,6 +51,7 @@ CONF_POLLING_INTERVAL: Final = "polling_interval"
 CONF_COMMAND_POLL_INTERVAL: Final = "command_poll_interval"
 CONF_DEVICE_SYNC_INTERVAL: Final = "device_sync_interval"
 CONF_ENABLE_VOLTAGE_SENSORS: Final = "enable_voltage_sensors"
+CONF_DEV_MODE: Final = "dev_mode"
 
 # Legacy configuration (kept for migration)
 CONF_SITE_IDS: Final = "site_ids"

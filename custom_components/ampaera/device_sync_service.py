@@ -164,7 +164,7 @@ class AmperaDeviceSyncService:
     async def _sync_devices(self) -> None:
         """Sync devices to Ampæra.
 
-        Discovers current devices, filters by selected device IDs,
+        Discovers current devices, filters by selected device/entity IDs,
         and syncs to Ampæra backend. Updates entity mappings for push service.
         """
         if not self._running:
@@ -174,10 +174,9 @@ class AmperaDeviceSyncService:
             # Discover all devices (grouped by parent device_id)
             all_devices = self._discovery.discover_devices()
 
-            # Filter to selected device IDs only
-            selected_devices = [
-                d for d in all_devices if d.ha_device_id in self._selected_device_ids
-            ]
+            # Filter to selected devices
+            # Support both device IDs (new) and entity IDs (legacy config)
+            selected_devices = self._filter_selected_devices(all_devices)
 
             if not selected_devices:
                 _LOGGER.debug("No selected devices found for sync")
@@ -228,6 +227,54 @@ class AmperaDeviceSyncService:
 
         except Exception as err:
             _LOGGER.error("Device sync failed: %s", err)
+
+    def _filter_selected_devices(
+        self, all_devices: list[DiscoveredDevice]
+    ) -> list[DiscoveredDevice]:
+        """Filter devices to only those selected by user.
+
+        Supports both:
+        - Device IDs (ha_device_id): New configs with device grouping
+        - Entity IDs (sensor.xxx): Legacy configs before device grouping
+
+        Args:
+            all_devices: All discovered devices
+
+        Returns:
+            List of devices that match the selection
+        """
+        if not self._selected_device_ids:
+            return []
+
+        selected_devices: list[DiscoveredDevice] = []
+
+        for device in all_devices:
+            # Check 1: Direct match on ha_device_id (new device-based selection)
+            if device.ha_device_id in self._selected_device_ids:
+                selected_devices.append(device)
+                continue
+
+            # Check 2: Match on primary_entity_id (legacy entity-based selection)
+            if device.primary_entity_id in self._selected_device_ids:
+                selected_devices.append(device)
+                continue
+
+            # Check 3: Any entity in entity_mapping matches (legacy with grouped entities)
+            if any(
+                entity_id in self._selected_device_ids
+                for entity_id in device.entity_mapping.values()
+            ):
+                selected_devices.append(device)
+                continue
+
+        _LOGGER.debug(
+            "Filtered %d devices from %d total (selection has %d items)",
+            len(selected_devices),
+            len(all_devices),
+            len(self._selected_device_ids),
+        )
+
+        return selected_devices
 
     def _build_entity_mappings(
         self,

@@ -54,7 +54,11 @@
           "polling_interval": "Telemetri-sendeintervall (sekunder)",
           "command_poll_interval": "Kommando-hentingsintervall (sekunder)",
           "device_sync_interval": "Enhetssynkroniseringsintervall (sekunder)",
-          "enable_voltage_sensors": "Inkluder spenningssensorer i telemetri"
+          "enable_voltage_sensors": "Inkluder spenningssensorer i telemetri",
+          "dev_mode": "Utviklermodus (aktiver simulerings-dashboard)"
+        },
+        "data_description": {
+          "dev_mode": "Når aktivert, vises Simulerte Enheter-dashbordet for testing. Krever simulerings-YAML-konfigurasjon."
         }
       }
     }

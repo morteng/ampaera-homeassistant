@@ -20,6 +20,7 @@ from .const import (
     CONF_SITE_ID,
     CONF_SITE_NAME,
     DOMAIN,
+    INTEGRATION_VERSION,
 )
 
 if TYPE_CHECKING:
@@ -77,9 +78,13 @@ async def async_get_config_entry_diagnostics(
 
     # Build diagnostics data
     diagnostics: dict[str, Any] = {
+        "integration": {
+            "version": INTEGRATION_VERSION,
+            "domain": DOMAIN,
+        },
         "config_entry": {
             "entry_id": config_entry.entry_id,
-            "version": config_entry.version,
+            "config_version": config_entry.version,
             "domain": config_entry.domain,
             "title": config_entry.title,
             "source": config_entry.source,

@@ -54,7 +54,11 @@
           "polling_interval": "Telemetry push interval (seconds)",
           "command_poll_interval": "Command poll interval (seconds)",
           "device_sync_interval": "Device sync interval (seconds)",
-          "enable_voltage_sensors": "Include voltage sensors in telemetry"
+          "enable_voltage_sensors": "Include voltage sensors in telemetry",
+          "dev_mode": "Developer mode (enable simulation dashboard)"
+        },
+        "data_description": {
+          "dev_mode": "When enabled, shows the Simulated Devices dashboard for testing. Requires simulation YAML config."
         }
       }
     }

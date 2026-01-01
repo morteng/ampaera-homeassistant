@@ -405,6 +405,24 @@ class AmperaTelemetryPushService:
                 value *= 1000
             reading["power_w"] = value
 
+        elif capability == "power_l1":
+            # Phase-specific power (L1)
+            if unit == "kW":
+                value *= 1000
+            reading["power_l1_w"] = value
+
+        elif capability == "power_l2":
+            # Phase-specific power (L2)
+            if unit == "kW":
+                value *= 1000
+            reading["power_l2_w"] = value
+
+        elif capability == "power_l3":
+            # Phase-specific power (L3)
+            if unit == "kW":
+                value *= 1000
+            reading["power_l3_w"] = value
+
         elif capability == "energy":
             # Convert to kWh if needed
             if unit == "Wh":
