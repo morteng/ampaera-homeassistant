@@ -42,6 +42,8 @@ from .const import (
 )
 from .device_sync_service import AmperaDeviceSyncService
 from .push_service import AmperaTelemetryPushService
+from .services import async_setup_services as async_setup_simulation_services
+from .services import async_unload_services as async_unload_simulation_services
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -168,6 +170,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Register services (only once for the domain)
     await _async_setup_services(hass)
 
+    # Register simulation services
+    await async_setup_simulation_services(hass)
+
     _LOGGER.info(
         "Ampæra integration started for site '%s' (%s) with %d devices, %d entities",
         site_name,
@@ -267,6 +272,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     api: AmperaApiClient = data.get("api")
     if api:
         await api.close()
+
+    # Unload simulation services if no entries remain
+    await async_unload_simulation_services(hass)
 
     _LOGGER.info("Ampæra integration unloaded")
     return True

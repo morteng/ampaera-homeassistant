@@ -168,15 +168,6 @@ KNOWN_POWER_METER_INTEGRATIONS = {
 # Entity name patterns that indicate specific device types, ordered by specificity.
 # These are checked when integration detection fails.
 
-EV_CHARGER_SIGNALS = {
-    # High confidence (unique to chargers)
-    "session_energy", "charging_power", "charging_current", "charging_status",
-    "cable_connected", "cable_locked", "charger_status", "ev_connected",
-    "max_charging_current", "dynamic_charger_limit", "pilot_level",
-    # Medium confidence
-    "charger", "lader", "elbil", "ev_",
-}
-
 WATER_HEATER_SIGNALS = {
     # High confidence (unique to water heaters)
     "tank_temperature", "water_temperature", "hot_water", "legionella",
@@ -186,13 +177,32 @@ WATER_HEATER_SIGNALS = {
 }
 
 AMS_POWER_METER_SIGNALS = {
-    # High confidence (unique to AMS meters)
-    "active_power_import", "active_power_export", "reactive_power",
+    # AMSHAN OBIS fields (high confidence)
+    "active_power_import", "active_power_import_l1", "active_power_import_l2", "active_power_import_l3",
+    "active_power_export",  # Will always be 0 for our simulation (no PV)
+    "reactive_power_import", "reactive_power_export",
     "voltage_l1", "voltage_l2", "voltage_l3",
     "current_l1", "current_l2", "current_l3",
-    "accumulated_consumption", "meter_id", "obis",
-    # Medium confidence
+    "power_factor", "power_factor_l1", "power_factor_l2", "power_factor_l3",
+    "active_power_import_total",  # Cumulative Wh counter
+    "meter_id", "meter_manufacturer",
+    "obis",  # OBIS code reference
+    # Norwegian keywords (medium confidence)
     "ams", "han", "strømmåler", "power_consumption",
+}
+
+EV_CHARGER_SIGNALS = {
+    # Easee/Zaptec entities (high confidence)
+    "status", "session_energy", "total_energy", "power",
+    "cable_connected", "cable_locked", "ev_connected",
+    "available_current_l1", "available_current_l2", "available_current_l3",
+    "actual_current_l1", "actual_current_l2", "actual_current_l3",
+    "charge_mode", "pilot_level", "operating_mode",
+    "max_charging_current", "dynamic_charger_limit",
+    # Generic EV charger signals (medium confidence)
+    "charging_power", "charging_current", "charging_status", "charger_status",
+    # Norwegian keywords
+    "charger", "lader", "elbil", "ev_",
 }
 
 # =============================================================================
@@ -552,6 +562,57 @@ class AmperaDeviceDiscovery:
         )
         return devices
 
+    def _is_control_only_device(self, entities: list[State]) -> bool:
+        """Check if device is a control-only device (input helper) for another device.
+
+        Returns True if the device:
+        1. Contains ONLY switch/input_* entities (no sensors)
+        2. AND entity names match known device type keywords (water, ev, charger, etc.)
+
+        These are likely HA input helpers used to control water heaters, EV chargers, etc.
+        and should not be discovered as separate devices.
+        """
+        # Check if all entities are switches or input helpers
+        has_sensors = False
+        switch_entities: list[State] = []
+
+        for state in entities:
+            domain = state.entity_id.split(".")[0]
+            if domain == "sensor":
+                has_sensors = True
+                break
+            elif domain in ("switch", "input_boolean", "input_number", "input_select"):
+                switch_entities.append(state)
+
+        # If has sensors, it's a real device
+        if has_sensors:
+            return False
+
+        # If no switch-like entities, not a control device
+        if not switch_entities:
+            return False
+
+        # Check if entity names match known device type keywords
+        # These keywords indicate the switch is a control for another device type
+        control_keywords = {
+            # EV charger controls
+            "ev", "charger", "lader", "elbil", "charging",
+            # Water heater controls
+            "water", "heater", "varmtvann", "bereder", "boiler",
+            # Generic device controls (these shouldn't be separate devices)
+            "smart", "power", "enable", "disable", "boost", "eco",
+        }
+
+        for state in switch_entities:
+            entity_name = state.entity_id.split(".")[1].lower()
+            friendly_name = state.attributes.get("friendly_name", "").lower()
+            search_text = f"{entity_name} {friendly_name}"
+
+            if any(kw in search_text for kw in control_keywords):
+                return True
+
+        return False
+
     def _build_device_from_entities(
         self, device_id: str, entities: list[State]
     ) -> DiscoveredDevice | None:
@@ -561,6 +622,16 @@ class AmperaDeviceDiscovery:
         their capabilities into a single device.
         """
         if not entities:
+            return None
+
+        # Skip devices that are ONLY switches with names matching other device types
+        # These are likely input helpers used to control other devices (water heaters, EV chargers)
+        # and should not be discovered as separate devices
+        if self._is_control_only_device(entities):
+            _LOGGER.debug(
+                "Skipping control-only device (likely input helper): %s",
+                device_id,
+            )
             return None
 
         # Get device info from registry
@@ -698,6 +769,47 @@ class AmperaDeviceDiscovery:
 
         return f"orphan_{entity_id}"
 
+    def _detect_orphan_switch_type(self, state: State) -> str:
+        """Detect device type for an orphan switch entity.
+
+        Switches may belong to water heaters, EV chargers, or other devices.
+        Uses keyword matching to associate them with their logical device type.
+
+        Returns group_id for the entity.
+        """
+        entity_id = state.entity_id
+        entity_name = entity_id.split(".")[1].lower()
+        friendly_name = state.attributes.get("friendly_name", "").lower()
+        search_text = f"{entity_name} {friendly_name}"
+
+        # Check integration platform first
+        platform = self._get_entity_platform(entity_id)
+        if platform:
+            platform_lower = platform.lower()
+            if platform_lower in KNOWN_EV_CHARGER_INTEGRATIONS:
+                return "virtual_ev_charger"
+            if platform_lower in KNOWN_WATER_HEATER_INTEGRATIONS:
+                return "virtual_water_heater"
+
+        # EV charger keywords (check first - more specific)
+        ev_keywords = {"ev", "charger", "lader", "elbil", "easee", "zaptec", "wallbox"}
+        if any(kw in search_text for kw in ev_keywords):
+            return "virtual_ev_charger"
+
+        # Water heater keywords
+        wh_keywords = {"water", "heater", "varmtvann", "bereder", "boiler", "hot_water"}
+        if any(kw in search_text for kw in wh_keywords):
+            return "virtual_water_heater"
+
+        # For other switches, don't create separate devices - skip them
+        # This prevents creating duplicate "Water", "Ev", "Smart" devices
+        # These orphan switches without clear association should be ignored
+        _LOGGER.debug(
+            "Skipping orphan switch without device association: %s",
+            entity_id,
+        )
+        return f"skip_{entity_id}"
+
     def _group_orphan_entities(
         self, orphan_entities: list[State]
     ) -> dict[str, list[tuple[State, AmperaCapability]]]:
@@ -705,11 +817,11 @@ class AmperaDeviceDiscovery:
 
         Uses smart device type detection (integration → signals → keywords)
         to group orphan entities that should belong together:
-        - EV charger sensors → "virtual_ev_charger" group
-        - Water heater sensors → "virtual_water_heater" group
+        - EV charger sensors/switches → "virtual_ev_charger" group
+        - Water heater sensors/switches → "virtual_water_heater" group
         - AMS/power meter sensors → "virtual_power_meter" group
         - Climate entities → "virtual_climate" group
-        - Switch entities → grouped by name prefix
+        - Other switch entities → grouped by name prefix
 
         Returns:
             Dict of group_id → list of (state, capability) tuples
@@ -732,12 +844,8 @@ class AmperaDeviceDiscovery:
             elif domain == "climate":
                 group_id = "virtual_climate"
             elif domain == "switch":
-                # Try to group switches by name prefix (e.g., "living_room_")
-                name_parts = entity_id.split(".")[1].split("_")
-                if len(name_parts) >= 2:
-                    group_id = f"virtual_switch_{name_parts[0]}"
-                else:
-                    group_id = f"virtual_switch_{entity_id}"
+                # Use smart detection for switches too - they may belong to EV chargers, water heaters
+                group_id = self._detect_orphan_switch_type(state)
             else:
                 # Individual orphan - keep as separate device
                 group_id = f"orphan_{entity_id}"
@@ -754,6 +862,10 @@ class AmperaDeviceDiscovery:
         Creates a virtual parent device for grouped orphan entities.
         """
         if not entities:
+            return None
+
+        # Skip groups marked for exclusion (orphan switches without clear device association)
+        if group_id.startswith("skip_"):
             return None
 
         # Collect all capabilities and entity mappings

@@ -1,14 +1,75 @@
-# Services for Ampaera Energy integration
-# These services allow users to manually trigger sync and telemetry operations
+# Services for Ampæra Energy integration
+# Sync, telemetry, and simulation control services
 
 force_sync:
   name: Force device sync
   description: >-
-    Immediately synchronize all Home Assistant devices with the Ampaera cloud.
+    Immediately synchronize all Home Assistant devices with the Ampæra cloud.
     This is useful after adding new devices or if sync appears out of date.
 
 push_telemetry:
   name: Push telemetry
   description: >-
-    Immediately push current telemetry data to the Ampaera cloud.
-    Useful for ensuring the latest readings are available in the Ampaera dashboard.
+    Immediately push current telemetry data to the Ampæra cloud.
+    Useful for ensuring the latest readings are available in the Ampæra dashboard.
+
+# =============================================================================
+# Simulation Control Services
+# =============================================================================
+# These services control the simulated devices defined in
+# packages/simulated_devices.yaml via their input_boolean/input_number helpers.
+
+connect_ev:
+  name: Connect EV
+  description: >-
+    Simulate connecting an EV to the charger.
+    Sets input_boolean.ev_charger_connected to on and resets session energy.
+
+disconnect_ev:
+  name: Disconnect EV
+  description: >-
+    Simulate disconnecting an EV from the charger.
+    Stops any active charging session.
+
+simulate_shower:
+  name: Simulate Shower
+  description: >-
+    Simulate hot water usage which drops the water heater temperature.
+    Useful for testing recovery times and price optimization.
+  fields:
+    liters:
+      name: Water Usage
+      description: Amount of hot water used in liters (typical shower is 40-60L)
+      required: false
+      default: 50
+      example: 50
+      selector:
+        number:
+          min: 10
+          max: 200
+          step: 10
+          unit_of_measurement: "L"
+
+set_ev_charge_limit:
+  name: Set EV Charge Limit
+  description: >-
+    Set the maximum charging current for the EV charger.
+    If currently charging, updates the power output accordingly.
+  fields:
+    current_limit:
+      name: Current Limit
+      description: Maximum charging current in amps (6-32A)
+      required: true
+      example: 16
+      selector:
+        number:
+          min: 6
+          max: 32
+          step: 1
+          unit_of_measurement: "A"
+
+boost_water_heater:
+  name: Boost Water Heater
+  description: >-
+    Set water heater to boost mode (75°C target, max power).
+    Use before high-price periods to pre-heat water.
