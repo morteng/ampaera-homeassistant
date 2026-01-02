@@ -5,6 +5,10 @@ to the Ampæra cloud platform.
 
 Supports entity-to-device mapping where multiple HA entities
 (sensors) are grouped under a single parent device.
+
+Works with both real hardware integrations (e.g., Tibber, Easee, Shelly)
+and simulated/demo devices (e.g., template sensors, input helpers) to
+support development and demo environments.
 """
 
 from __future__ import annotations
@@ -38,6 +42,9 @@ DEFAULT_DEBOUNCE_SECONDS = 2.0
 # Maximum batch size before forcing a push
 MAX_BATCH_SIZE = 50
 
+# Heartbeat interval for periodic push (ensures data flows even without state changes)
+DEFAULT_HEARTBEAT_SECONDS = 30.0
+
 
 @dataclass
 class EntityMapping:
@@ -69,6 +76,7 @@ class AmperaTelemetryPushService:
         site_id: str,
         entity_mappings: dict[str, EntityMapping],
         debounce_seconds: float = DEFAULT_DEBOUNCE_SECONDS,
+        heartbeat_seconds: float = DEFAULT_HEARTBEAT_SECONDS,
     ) -> None:
         """Initialize the push service.
 
@@ -78,12 +86,14 @@ class AmperaTelemetryPushService:
             site_id: Ampæra site UUID
             entity_mappings: Mapping of HA entity_id → EntityMapping
             debounce_seconds: Seconds to wait before pushing batched changes
+            heartbeat_seconds: Seconds between periodic heartbeat pushes
         """
         self._hass = hass
         self._api = api_client
         self._site_id = site_id
         self._entity_mappings = entity_mappings
         self._debounce_seconds = debounce_seconds
+        self._heartbeat_seconds = heartbeat_seconds
 
         # Pending readings to push (keyed by device_id to dedupe)
         # Each device accumulates readings from multiple entities
@@ -92,6 +102,9 @@ class AmperaTelemetryPushService:
 
         # Debounce timer
         self._debounce_task: asyncio.Task | None = None
+
+        # Heartbeat timer for periodic push
+        self._heartbeat_task: asyncio.Task | None = None
 
         # Unsubscribe callback
         self._unsubscribe: callable | None = None
@@ -162,9 +175,10 @@ class AmperaTelemetryPushService:
             return
 
         _LOGGER.info(
-            "Starting telemetry push service for site %s with %d entities",
+            "Starting telemetry push service for site %s with %d entities (heartbeat: %.0fs)",
             self._site_id,
             len(self._entity_mappings),
+            self._heartbeat_seconds,
         )
 
         # Subscribe to state changes for tracked entities
@@ -179,12 +193,22 @@ class AmperaTelemetryPushService:
         # Push initial states
         await self._push_initial_states()
 
+        # Start heartbeat for periodic pushes (ensures data flows even without changes)
+        self._heartbeat_task = self._hass.async_create_task(self._run_heartbeat())
+
     async def async_stop(self) -> None:
         """Stop the push service."""
         if not self._running:
             return
 
         _LOGGER.info("Stopping telemetry push service")
+
+        # Cancel heartbeat timer
+        if self._heartbeat_task:
+            self._heartbeat_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._heartbeat_task
+            self._heartbeat_task = None
 
         # Cancel debounce timer
         if self._debounce_task:
@@ -310,6 +334,20 @@ class AmperaTelemetryPushService:
         """Wait for debounce period then push."""
         await asyncio.sleep(self._debounce_seconds)
         await self._flush_pending()
+
+    async def _run_heartbeat(self) -> None:
+        """Periodically push current states regardless of changes.
+
+        This ensures telemetry data flows continuously even when sensor
+        values don't change (common in simulated/demo environments).
+        """
+        while self._running:
+            await asyncio.sleep(self._heartbeat_seconds)
+            if not self._running:
+                break
+
+            _LOGGER.debug("Heartbeat: pushing current states")
+            await self.async_push_now()
 
     async def _flush_pending(self) -> None:
         """Push all pending readings to Ampæra."""

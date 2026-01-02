@@ -113,6 +113,7 @@ SUPPORTED_DOMAINS = {
     "climate",
 }
 
+
 # =============================================================================
 # Norwegian Market Integration Detection
 # =============================================================================
@@ -517,6 +518,9 @@ class AmperaDeviceDiscovery:
 
         Groups entities by their parent device_id and returns one
         DiscoveredDevice per physical device with combined capabilities.
+
+        Note: All entity types are included (real hardware, templates, helpers)
+        to support demo/development environments with simulated devices.
         """
         self._ensure_registries()
 
