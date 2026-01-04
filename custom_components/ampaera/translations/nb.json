@@ -24,6 +24,20 @@
           "selected_entities": "Enheter å synkronisere"
         }
       },
+      "simulation": {
+        "title": "Husholdningssimulering (Valgfritt)",
+        "description": "Aktiver realistisk strømforbrukssimulering for demoner og testing. Dette oppretter simulerte apparater (oppvaskmaskin, stekeovn, vaskemaskin osv.) som følger norske daglige mønstre - alt kjører lokalt i Home Assistant.",
+        "data": {
+          "enable_simulation": "Aktiver husholdningssimulering",
+          "simulation_household_profile": "Husholdningsprofil",
+          "simulation_water_heater_type": "Type varmtvannsbereder"
+        },
+        "data_description": {
+          "enable_simulation": "Oppretter simulerte apparater med realistisk strømforbruk",
+          "simulation_household_profile": "Påvirker forbruksmønster, tidspunkt og apparatbruk",
+          "simulation_water_heater_type": "Gamle bereder har ingen temperatursensor, smarte har full kontroll"
+        }
+      },
       "reauth_confirm": {
         "title": "Autentiser Ampæra på nytt",
         "description": "API-nøkkelen din har utløpt. Vennligst oppgi en ny API-nøkkel.",
@@ -49,16 +63,22 @@
     "step": {
       "init": {
         "title": "Ampæra-innstillinger",
-        "description": "Konfigurer hvordan integrasjonen synkroniserer med Ampæra.",
+        "description": "Konfigurer integrasjon, simulering og synkroniseringsinnstillinger.",
         "data": {
           "polling_interval": "Telemetri-sendeintervall (sekunder)",
           "command_poll_interval": "Kommando-hentingsintervall (sekunder)",
           "device_sync_interval": "Enhetssynkroniseringsintervall (sekunder)",
           "enable_voltage_sensors": "Inkluder spenningssensorer i telemetri",
-          "dev_mode": "Utviklermodus (aktiver simulerings-dashboard)"
+          "dev_mode": "Utviklermodus (avansert feilsøking)",
+          "enable_simulation": "Aktiver husholdningssimulering",
+          "simulation_household_profile": "Husholdningsprofil",
+          "simulation_water_heater_type": "Type varmtvannsbereder"
         },
         "data_description": {
-          "dev_mode": "Når aktivert, vises Simulerte Enheter-dashbordet for testing. Krever simulerings-YAML-konfigurasjon."
+          "dev_mode": "Viser avanserte feilsøkingsalternativer og simulerings-dashboard",
+          "enable_simulation": "Oppretter simulerte apparater med realistiske daglige mønstre",
+          "simulation_household_profile": "Familie bruker mer strøm, studenter mindre, pensjonister har andre tidspunkt",
+          "simulation_water_heater_type": "Gammel (enkel) vs Smart påvirker tilgjengelige kontroller og sensorer"
         }
       }
     }

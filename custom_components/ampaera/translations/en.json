@@ -24,6 +24,20 @@
           "selected_entities": "Devices to sync"
         }
       },
+      "simulation": {
+        "title": "Household Simulation (Optional)",
+        "description": "Enable realistic household power simulation for demos and testing. This creates simulated appliances (dishwasher, oven, washing machine, etc.) that follow Norwegian daily patterns - all running locally in Home Assistant.",
+        "data": {
+          "enable_simulation": "Enable household simulation",
+          "simulation_household_profile": "Household profile",
+          "simulation_water_heater_type": "Water heater type"
+        },
+        "data_description": {
+          "enable_simulation": "Creates simulated appliances with realistic power consumption patterns",
+          "simulation_household_profile": "Affects consumption patterns, timing, and appliance usage",
+          "simulation_water_heater_type": "Old heaters have no temperature sensor, smart heaters have full control"
+        }
+      },
       "reauth_confirm": {
         "title": "Reauthenticate Ampæra",
         "description": "Your API key has expired. Please enter a new API key.",
@@ -49,16 +63,22 @@
     "step": {
       "init": {
         "title": "Ampæra Settings",
-        "description": "Configure how the integration syncs with Ampæra.",
+        "description": "Configure integration behavior, simulation, and synchronization settings.",
         "data": {
           "polling_interval": "Telemetry push interval (seconds)",
           "command_poll_interval": "Command poll interval (seconds)",
           "device_sync_interval": "Device sync interval (seconds)",
           "enable_voltage_sensors": "Include voltage sensors in telemetry",
-          "dev_mode": "Developer mode (enable simulation dashboard)"
+          "dev_mode": "Developer mode (advanced debugging)",
+          "enable_simulation": "Enable household simulation",
+          "simulation_household_profile": "Household profile",
+          "simulation_water_heater_type": "Water heater type"
         },
         "data_description": {
-          "dev_mode": "When enabled, shows the Simulated Devices dashboard for testing. Requires simulation YAML config."
+          "dev_mode": "Shows advanced debugging options and simulation dashboard",
+          "enable_simulation": "Creates simulated appliances with realistic daily patterns",
+          "simulation_household_profile": "Family uses more power, students less, retirees have different schedules",
+          "simulation_water_heater_type": "Old (dumb) vs Smart affects available controls and sensors"
         }
       }
     }

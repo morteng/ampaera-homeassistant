@@ -30,6 +30,15 @@
         "data": {
           "api_key": "API Key"
         }
+      },
+      "simulation": {
+        "title": "Household Simulation (Optional)",
+        "description": "Enable realistic household power simulation for demos and testing. This creates simulated appliances (dishwasher, oven, washing machine, etc.) that follow Norwegian daily patterns without needing the Ampaera backend.",
+        "data": {
+          "enable_simulation": "Enable household simulation",
+          "simulation_household_profile": "Household profile",
+          "simulation_water_heater_type": "Water heater type"
+        }
       }
     },
     "error": {
@@ -49,12 +58,16 @@
     "step": {
       "init": {
         "title": "Ampaera Settings",
-        "description": "Configure how the integration syncs with Ampaera.",
+        "description": "Configure integration behavior, simulation, and synchronization settings.",
         "data": {
           "polling_interval": "Telemetry push interval (seconds)",
           "command_poll_interval": "Command poll interval (seconds)",
           "device_sync_interval": "Device sync interval (seconds)",
-          "enable_voltage_sensors": "Include voltage sensors in telemetry"
+          "enable_voltage_sensors": "Include voltage sensors in telemetry",
+          "dev_mode": "Developer mode (advanced debugging)",
+          "enable_simulation": "Enable household simulation",
+          "simulation_household_profile": "Household profile",
+          "simulation_water_heater_type": "Water heater type"
         }
       }
     }

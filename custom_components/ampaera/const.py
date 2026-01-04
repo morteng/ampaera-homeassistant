@@ -53,6 +53,27 @@ CONF_DEVICE_SYNC_INTERVAL: Final = "device_sync_interval"
 CONF_ENABLE_VOLTAGE_SENSORS: Final = "enable_voltage_sensors"
 CONF_DEV_MODE: Final = "dev_mode"
 
+# Configuration - Simulation
+CONF_ENABLE_SIMULATION: Final = "enable_simulation"
+CONF_SIMULATION_HOUSEHOLD_PROFILE: Final = "simulation_household_profile"
+CONF_SIMULATION_WATER_HEATER_TYPE: Final = "simulation_water_heater_type"
+
+# Simulation household profiles
+SIMULATION_PROFILES: Final = [
+    ("family", "Family (2 adults, 2 kids)"),
+    ("couple", "Couple (2 adults)"),
+    ("single", "Single"),
+    ("retiree", "Retiree"),
+    ("student", "Student"),
+]
+
+# Simulation water heater types
+SIMULATION_WH_TYPES: Final = [
+    ("old", "Old (On/Off only, no temp sensor)"),
+    ("standard", "Standard (Basic thermostat)"),
+    ("smart", "Smart (Full temperature control)"),
+]
+
 # Legacy configuration (kept for migration)
 CONF_SITE_IDS: Final = "site_ids"
 CONF_ENABLE_SSE: Final = "enable_sse"

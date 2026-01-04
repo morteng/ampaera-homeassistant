@@ -30,8 +30,11 @@ from .const import (
     CONF_API_URL,
     CONF_COMMAND_POLL_INTERVAL,
     CONF_DEVICE_SYNC_INTERVAL,
+    CONF_ENABLE_SIMULATION,
     CONF_POLLING_INTERVAL,
     CONF_SELECTED_ENTITIES,
+    CONF_SIMULATION_HOUSEHOLD_PROFILE,
+    CONF_SIMULATION_WATER_HEATER_TYPE,
     CONF_SITE_ID,
     CONF_SITE_NAME,
     DEFAULT_API_BASE_URL,
@@ -173,12 +176,39 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Register simulation services
     await async_setup_simulation_services(hass)
 
+    # Check if simulation is enabled
+    simulation_enabled = entry.data.get(CONF_ENABLE_SIMULATION, False) or entry.options.get(
+        CONF_ENABLE_SIMULATION, False
+    )
+    if simulation_enabled:
+        household_profile = entry.data.get(
+            CONF_SIMULATION_HOUSEHOLD_PROFILE,
+            entry.options.get(CONF_SIMULATION_HOUSEHOLD_PROFILE, "family"),
+        )
+        wh_type = entry.data.get(
+            CONF_SIMULATION_WATER_HEATER_TYPE,
+            entry.options.get(CONF_SIMULATION_WATER_HEATER_TYPE, "smart"),
+        )
+        _LOGGER.info(
+            "Household simulation ENABLED - Profile: %s, Water heater: %s. "
+            "Ensure simulation packages are added to your configuration.yaml",
+            household_profile,
+            wh_type,
+        )
+        # Store simulation config in hass.data for other components to access
+        hass.data[DOMAIN][entry.entry_id]["simulation"] = {
+            "enabled": True,
+            "household_profile": household_profile,
+            "water_heater_type": wh_type,
+        }
+
     _LOGGER.info(
-        "Ampæra integration started for site '%s' (%s) with %d devices, %d entities",
+        "Ampæra integration started for site '%s' (%s) with %d devices, %d entities%s",
         site_name,
         site_id,
         len(device_id_mappings),
         len(entity_mappings),
+        " (simulation enabled)" if simulation_enabled else "",
     )
 
     return True
@@ -239,6 +269,19 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     if device_sync_service:
         new_interval = entry.options.get(CONF_DEVICE_SYNC_INTERVAL, DEFAULT_DEVICE_SYNC_INTERVAL)
         device_sync_service.set_sync_interval(new_interval)
+
+    # Update simulation config if changed
+    simulation_enabled = entry.options.get(CONF_ENABLE_SIMULATION, False)
+    if simulation_enabled:
+        data["simulation"] = {
+            "enabled": True,
+            "household_profile": entry.options.get(CONF_SIMULATION_HOUSEHOLD_PROFILE, "family"),
+            "water_heater_type": entry.options.get(CONF_SIMULATION_WATER_HEATER_TYPE, "smart"),
+        }
+        _LOGGER.info("Simulation updated: %s", data["simulation"])
+    elif "simulation" in data:
+        del data["simulation"]
+        _LOGGER.info("Simulation disabled")
 
     _LOGGER.info("Ampæra options updated")
 

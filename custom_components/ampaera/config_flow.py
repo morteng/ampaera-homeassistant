@@ -44,11 +44,14 @@ from .const import (
     CONF_DEV_MODE,
     CONF_DEVICE_MAPPINGS,
     CONF_DEVICE_SYNC_INTERVAL,
+    CONF_ENABLE_SIMULATION,
     CONF_ENABLE_VOLTAGE_SENSORS,
     CONF_GRID_REGION,
     CONF_HA_INSTANCE_ID,
     CONF_POLLING_INTERVAL,
     CONF_SELECTED_ENTITIES,
+    CONF_SIMULATION_HOUSEHOLD_PROFILE,
+    CONF_SIMULATION_WATER_HEATER_TYPE,
     CONF_SITE_ID,
     CONF_SITE_NAME,
     DEFAULT_API_BASE_URL,
@@ -57,6 +60,8 @@ from .const import (
     DEFAULT_POLLING_INTERVAL,
     DOMAIN,
     GRID_REGIONS,
+    SIMULATION_PROFILES,
+    SIMULATION_WH_TYPES,
 )
 from .device_discovery import AmperaDeviceDiscovery
 
@@ -91,6 +96,10 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
         self._selected_entities: list[str] = []
         self._site_id: str | None = None
         self._device_mappings: dict[str, str] = {}
+        # Simulation options
+        self._enable_simulation: bool = False
+        self._simulation_profile: str = "family"
+        self._simulation_wh_type: str = "smart"
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -202,8 +211,8 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
             if not self._selected_entities:
                 errors["base"] = "no_devices_selected"
             else:
-                # Register site and devices on Ampæra
-                return await self._async_register_and_complete()
+                # Move to simulation configuration step
+                return await self.async_step_simulation()
 
         # Discover devices
         discovery = AmperaDeviceDiscovery(self.hass)
@@ -250,6 +259,65 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
             description_placeholders={
                 "device_count": str(len(self._discovered_devices))
             },
+        )
+
+    async def async_step_simulation(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle simulation configuration step (optional).
+
+        Allows users to enable household appliance simulation for demos
+        without needing an actual Ampæra backend connection.
+        """
+        if user_input is not None:
+            self._enable_simulation = user_input.get(CONF_ENABLE_SIMULATION, False)
+            self._simulation_profile = user_input.get(
+                CONF_SIMULATION_HOUSEHOLD_PROFILE, "family"
+            )
+            self._simulation_wh_type = user_input.get(
+                CONF_SIMULATION_WATER_HEATER_TYPE, "smart"
+            )
+
+            # Proceed to registration
+            return await self._async_register_and_complete()
+
+        # Build profile options
+        profile_options = [
+            SelectOptionDict(value=code, label=name)
+            for code, name in SIMULATION_PROFILES
+        ]
+
+        # Build water heater type options
+        wh_type_options = [
+            SelectOptionDict(value=code, label=name)
+            for code, name in SIMULATION_WH_TYPES
+        ]
+
+        return self.async_show_form(
+            step_id="simulation",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_ENABLE_SIMULATION, default=False
+                    ): bool,
+                    vol.Optional(
+                        CONF_SIMULATION_HOUSEHOLD_PROFILE, default="family"
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=profile_options,
+                            mode=SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_SIMULATION_WATER_HEATER_TYPE, default="smart"
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=wh_type_options,
+                            mode=SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                }
+            ),
         )
 
     async def _async_register_and_complete(self) -> ConfigFlowResult:
@@ -307,6 +375,10 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_HA_INSTANCE_ID: self._ha_instance_id,
                     CONF_SELECTED_ENTITIES: self._selected_entities,
                     CONF_DEVICE_MAPPINGS: self._device_mappings,
+                    # Simulation config
+                    CONF_ENABLE_SIMULATION: self._enable_simulation,
+                    CONF_SIMULATION_HOUSEHOLD_PROFILE: self._simulation_profile,
+                    CONF_SIMULATION_WATER_HEATER_TYPE: self._simulation_wh_type,
                 },
             )
 
@@ -393,6 +465,7 @@ class AmperaOptionsFlow(OptionsFlow):
     - Command polling interval
     - Voltage sensor visibility
     - Developer mode (simulation dashboard)
+    - Household simulation settings
     """
 
     # Note: config_entry is provided by the base OptionsFlow class
@@ -405,8 +478,21 @@ class AmperaOptionsFlow(OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        # Get current options with defaults
+        # Get current options with defaults (check both options and data)
         current_options = self.config_entry.options
+        entry_data = self.config_entry.data
+
+        # Build profile options
+        profile_options = [
+            SelectOptionDict(value=code, label=name)
+            for code, name in SIMULATION_PROFILES
+        ]
+
+        # Build water heater type options
+        wh_type_options = [
+            SelectOptionDict(value=code, label=name)
+            for code, name in SIMULATION_WH_TYPES
+        ]
 
         return self.async_show_form(
             step_id="init",
@@ -440,6 +526,38 @@ class AmperaOptionsFlow(OptionsFlow):
                         CONF_DEV_MODE,
                         default=current_options.get(CONF_DEV_MODE, False),
                     ): bool,
+                    # Simulation options
+                    vol.Optional(
+                        CONF_ENABLE_SIMULATION,
+                        default=current_options.get(
+                            CONF_ENABLE_SIMULATION,
+                            entry_data.get(CONF_ENABLE_SIMULATION, False),
+                        ),
+                    ): bool,
+                    vol.Optional(
+                        CONF_SIMULATION_HOUSEHOLD_PROFILE,
+                        default=current_options.get(
+                            CONF_SIMULATION_HOUSEHOLD_PROFILE,
+                            entry_data.get(CONF_SIMULATION_HOUSEHOLD_PROFILE, "family"),
+                        ),
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=profile_options,
+                            mode=SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_SIMULATION_WATER_HEATER_TYPE,
+                        default=current_options.get(
+                            CONF_SIMULATION_WATER_HEATER_TYPE,
+                            entry_data.get(CONF_SIMULATION_WATER_HEATER_TYPE, "smart"),
+                        ),
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=wh_type_options,
+                            mode=SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
                 }
             ),
         )
