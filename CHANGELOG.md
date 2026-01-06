@@ -5,6 +5,35 @@ All notable changes to the Ampæra Home Assistant integration.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-01-06
+
+### Added
+- **Installation Mode Selection**: Users now choose between "Real Devices" and "Simulation" modes during setup
+  - Real Device Mode: For production use with physical hardware
+  - Simulation Mode: For demos and testing with simulated devices
+  - Modes are mutually exclusive to prevent mixing simulated and real devices
+- **Enhanced Device Discovery**: Expanded support for Norwegian and European smart devices
+  - EV Chargers: Added ELKO, CTEK, ABB Terra, Schneider EVlink, KEBA, MENNEKES (24 total integrations)
+  - Water Heaters: Added Høiax, OSO, Adax, Nobø, Glen Dimplex, Tado, Netatmo (14 total integrations)
+  - Power Meters: Added Futurehome, Heatit, HomeWizard, IoTaWatt, Emporia Vue (18 total integrations)
+- **Norwegian Language Keywords**: Improved detection using Norwegian terms ("elbillader", "varmtvannsbereder", "strømmåler")
+- **EV Charger Commands**: Full support for start_charge, stop_charge, set_current_limit commands
+- **Entity Resolution**: Smart mapping of commands to correct entity types (sensors → switches/input_numbers)
+
+### Changed
+- Config flow now routes to mode-specific steps (simulation skips device discovery)
+- Options flow shows mode-specific settings only
+- Entry title includes "(Simulation)" suffix for simulation mode installations
+
+### Fixed
+- Command routing: Commands now correctly target switch/input_number entities instead of sensors
+- Backward compatibility: ConfigFlowResult import works with HA 2024.3.3+
+- Entity mapping callback: Device sync service properly notifies command service of mapping updates
+
+### Compatibility
+- Home Assistant: 2024.1.0+
+- Ampæra API: v0.21.0+
+
 ## [1.0.0] - 2026-01-01
 
 ### Added

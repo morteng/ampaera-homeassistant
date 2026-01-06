@@ -9,6 +9,16 @@
           "api_url": "API URL (optional, for development)"
         }
       },
+      "mode": {
+        "title": "Installation Mode",
+        "description": "Choose how you want to use Ampæra. **Real Devices** connects to your actual smart devices (EV charger, water heater, etc.). **Simulation** creates demo devices for testing without affecting real hardware. These modes are mutually exclusive.",
+        "data": {
+          "installation_mode": "Installation mode"
+        },
+        "data_description": {
+          "installation_mode": "Real Devices: Production use with physical devices. Simulation: Demo/testing with simulated devices."
+        }
+      },
       "location": {
         "title": "Configure Site",
         "description": "Set your site name and select your electricity grid region for accurate spot pricing.",
@@ -19,21 +29,19 @@
       },
       "devices": {
         "title": "Select Devices",
-        "description": "Choose which Home Assistant devices to sync with Ampæra. Found {device_count} compatible devices.",
+        "description": "Choose which Home Assistant devices to sync with Ampæra. Found {device_count} compatible devices. Only real physical devices are shown - no simulated devices.",
         "data": {
           "selected_entities": "Devices to sync"
         }
       },
       "simulation": {
-        "title": "Household Simulation (Optional)",
-        "description": "Enable realistic household power simulation for demos and testing. This creates simulated appliances (dishwasher, oven, washing machine, etc.) that follow Norwegian daily patterns - all running locally in Home Assistant.",
+        "title": "Configure Simulation",
+        "description": "Configure your simulated household for demos and testing. This creates realistic appliances (dishwasher, oven, washing machine, water heater, EV charger, etc.) with Norwegian daily consumption patterns - all running locally in Home Assistant.",
         "data": {
-          "enable_simulation": "Enable household simulation",
           "simulation_household_profile": "Household profile",
           "simulation_water_heater_type": "Water heater type"
         },
         "data_description": {
-          "enable_simulation": "Creates simulated appliances with realistic power consumption patterns",
           "simulation_household_profile": "Affects consumption patterns, timing, and appliance usage",
           "simulation_water_heater_type": "Old heaters have no temperature sensor, smart heaters have full control"
         }
@@ -63,20 +71,22 @@
     "step": {
       "init": {
         "title": "Ampæra Settings",
-        "description": "Configure integration behavior, simulation, and synchronization settings.",
+        "description": "Configure integration behavior and synchronization settings. Available options depend on your installation mode.",
         "data": {
           "polling_interval": "Telemetry push interval (seconds)",
           "command_poll_interval": "Command poll interval (seconds)",
           "device_sync_interval": "Device sync interval (seconds)",
           "enable_voltage_sensors": "Include voltage sensors in telemetry",
           "dev_mode": "Developer mode (advanced debugging)",
-          "enable_simulation": "Enable household simulation",
           "simulation_household_profile": "Household profile",
           "simulation_water_heater_type": "Water heater type"
         },
         "data_description": {
+          "polling_interval": "How often to push telemetry data to Ampæra",
+          "command_poll_interval": "How often to check for pending commands",
+          "device_sync_interval": "How often to sync device state",
+          "enable_voltage_sensors": "Only available in Real Device mode",
           "dev_mode": "Shows advanced debugging options and simulation dashboard",
-          "enable_simulation": "Creates simulated appliances with realistic daily patterns",
           "simulation_household_profile": "Family uses more power, students less, retirees have different schedules",
           "simulation_water_heater_type": "Old (dumb) vs Smart affects available controls and sensors"
         }

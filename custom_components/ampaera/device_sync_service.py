@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import Event, callback
 from homeassistant.helpers.event import async_track_time_interval
@@ -25,6 +26,9 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .api import AmperaApiClient
+
+# Type alias for sync callback
+SyncCallback = Callable[[dict[str, str], dict[str, EntityMapping]], None]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -72,6 +76,8 @@ class AmperaDeviceSyncService:
         self._device_id_mappings: dict[str, str] = {}
         # Maps entity_id → EntityMapping (for push service)
         self._entity_mappings: dict[str, EntityMapping] = {}
+        # Callbacks to invoke after each sync
+        self._sync_callbacks: list[SyncCallback] = []
 
     @property
     def device_id_mappings(self) -> dict[str, str]:
@@ -82,6 +88,13 @@ class AmperaDeviceSyncService:
     def entity_mappings(self) -> dict[str, EntityMapping]:
         """Return entity mappings for telemetry push."""
         return self._entity_mappings
+
+    def register_sync_callback(self, callback: SyncCallback) -> None:
+        """Register a callback to be called after each sync.
+
+        The callback receives (device_id_mappings, entity_mappings).
+        """
+        self._sync_callbacks.append(callback)
 
     async def async_start(self) -> None:
         """Start the device sync service.
@@ -224,6 +237,13 @@ class AmperaDeviceSyncService:
                     updated,
                     removed,
                 )
+
+            # Invoke sync callbacks to notify other services of updated mappings
+            for cb in self._sync_callbacks:
+                try:
+                    cb(self._device_id_mappings, self._entity_mappings)
+                except Exception as cb_err:
+                    _LOGGER.warning("Sync callback error: %s", cb_err)
 
         except Exception as err:
             _LOGGER.error("Device sync failed: %s", err)

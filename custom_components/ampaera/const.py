@@ -53,6 +53,19 @@ CONF_DEVICE_SYNC_INTERVAL: Final = "device_sync_interval"
 CONF_ENABLE_VOLTAGE_SENSORS: Final = "enable_voltage_sensors"
 CONF_DEV_MODE: Final = "dev_mode"
 
+# Configuration - Installation Mode
+CONF_INSTALLATION_MODE: Final = "installation_mode"
+
+# Installation modes - mutually exclusive
+INSTALLATION_MODE_REAL: Final = "real"  # Real physical devices only
+INSTALLATION_MODE_SIMULATION: Final = "simulation"  # Simulated devices for demos/testing
+
+# Installation mode choices for config flow
+INSTALLATION_MODES: Final = [
+    (INSTALLATION_MODE_REAL, "Real Devices"),
+    (INSTALLATION_MODE_SIMULATION, "Simulation (Demo/Testing)"),
+]
+
 # Configuration - Simulation
 CONF_ENABLE_SIMULATION: Final = "enable_simulation"
 CONF_SIMULATION_HOUSEHOLD_PROFILE: Final = "simulation_household_profile"

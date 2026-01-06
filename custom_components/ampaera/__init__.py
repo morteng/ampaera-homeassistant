@@ -44,7 +44,7 @@ from .const import (
     DOMAIN,
 )
 from .device_sync_service import AmperaDeviceSyncService
-from .push_service import AmperaTelemetryPushService
+from .push_service import AmperaTelemetryPushService, EntityMapping
 from .services import async_setup_services as async_setup_simulation_services
 from .services import async_unload_services as async_unload_simulation_services
 
@@ -147,6 +147,39 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         device_mappings=device_id_mappings,
         poll_interval=command_poll_interval,
     )
+
+    # Build capability mappings for command routing (device_id → {capability → entity_id})
+    # This transforms entity_mappings (entity_id → EntityMapping) into a format
+    # the command service can use to resolve the correct entity for each command type
+    def build_capability_mappings(
+        ent_mappings: dict[str, "EntityMapping"],
+    ) -> dict[str, dict[str, str]]:
+        """Transform entity mappings to capability mappings."""
+        cap_mappings: dict[str, dict[str, str]] = {}
+        for ent_id, m in ent_mappings.items():
+            dev_id = m.device_id
+            if dev_id not in cap_mappings:
+                cap_mappings[dev_id] = {}
+            cap_mappings[dev_id][m.capability] = ent_id
+        return cap_mappings
+
+    capability_mappings = build_capability_mappings(entity_mappings)
+    command_service.set_entity_mappings(capability_mappings)
+
+    # Register callback to update command service when device sync updates mappings
+    def on_sync_complete(
+        _device_mappings: dict[str, str],
+        new_entity_mappings: dict[str, "EntityMapping"],
+    ) -> None:
+        """Update command service entity mappings after device sync."""
+        new_cap_mappings = build_capability_mappings(new_entity_mappings)
+        command_service.set_entity_mappings(new_cap_mappings)
+        _LOGGER.debug(
+            "Updated command service with %d capability mappings",
+            len(new_cap_mappings),
+        )
+
+    device_sync_service.register_sync_callback(on_sync_complete)
 
     # Start remaining services
     try:
@@ -269,6 +302,17 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     if device_sync_service:
         new_interval = entry.options.get(CONF_DEVICE_SYNC_INTERVAL, DEFAULT_DEVICE_SYNC_INTERVAL)
         device_sync_service.set_sync_interval(new_interval)
+
+        # If command service exists, update its entity mappings from latest sync
+        if command_service:
+            entity_mappings = device_sync_service.entity_mappings
+            capability_mappings: dict[str, dict[str, str]] = {}
+            for entity_id, mapping in entity_mappings.items():
+                device_id = mapping.device_id
+                if device_id not in capability_mappings:
+                    capability_mappings[device_id] = {}
+                capability_mappings[device_id][mapping.capability] = entity_id
+            command_service.set_entity_mappings(capability_mappings)
 
     # Update simulation config if changed
     simulation_enabled = entry.options.get(CONF_ENABLE_SIMULATION, False)

@@ -18,9 +18,14 @@ import voluptuous as vol
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
-    ConfigFlowResult,
     OptionsFlow,
 )
+
+# ConfigFlowResult was added in HA 2024.5+, use FlowResult for older versions
+try:
+    from homeassistant.config_entries import ConfigFlowResult
+except ImportError:
+    from homeassistant.data_entry_flow import FlowResult as ConfigFlowResult
 from homeassistant.core import callback
 from homeassistant.helpers.selector import (
     SelectOptionDict,
@@ -48,6 +53,7 @@ from .const import (
     CONF_ENABLE_VOLTAGE_SENSORS,
     CONF_GRID_REGION,
     CONF_HA_INSTANCE_ID,
+    CONF_INSTALLATION_MODE,
     CONF_POLLING_INTERVAL,
     CONF_SELECTED_ENTITIES,
     CONF_SIMULATION_HOUSEHOLD_PROFILE,
@@ -60,6 +66,9 @@ from .const import (
     DEFAULT_POLLING_INTERVAL,
     DOMAIN,
     GRID_REGIONS,
+    INSTALLATION_MODE_REAL,
+    INSTALLATION_MODE_SIMULATION,
+    INSTALLATION_MODES,
     SIMULATION_PROFILES,
     SIMULATION_WH_TYPES,
 )
@@ -96,7 +105,9 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
         self._selected_entities: list[str] = []
         self._site_id: str | None = None
         self._device_mappings: dict[str, str] = {}
-        # Simulation options
+        # Installation mode - mutually exclusive: "real" or "simulation"
+        self._installation_mode: str = INSTALLATION_MODE_REAL
+        # Simulation options (only used in simulation mode)
         self._enable_simulation: bool = False
         self._simulation_profile: str = "family"
         self._simulation_wh_type: str = "smart"
@@ -126,8 +137,8 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
                 else:
                     self._api_key = api_key
                     self._api_url = api_url
-                    # Move to location configuration
-                    return await self.async_step_location()
+                    # Move to installation mode selection
+                    return await self.async_step_mode()
 
             except AmperaAuthError as e:
                 _LOGGER.error("Auth error: %s", e)
@@ -159,6 +170,47 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
             description_placeholders={"default_url": DEFAULT_API_BASE_URL},
         )
 
+    async def async_step_mode(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle installation mode selection.
+
+        Users must choose between:
+        - Real Devices: For production use with actual physical devices
+        - Simulation: For demos and testing with simulated devices
+
+        These modes are mutually exclusive to prevent mixing simulated
+        and real devices in the same installation.
+        """
+        if user_input is not None:
+            self._installation_mode = user_input.get(
+                CONF_INSTALLATION_MODE, INSTALLATION_MODE_REAL
+            )
+            # Move to location configuration
+            return await self.async_step_location()
+
+        # Build mode options
+        mode_options = [
+            SelectOptionDict(value=code, label=name)
+            for code, name in INSTALLATION_MODES
+        ]
+
+        return self.async_show_form(
+            step_id="mode",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_INSTALLATION_MODE, default=INSTALLATION_MODE_REAL
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=mode_options,
+                            mode=SelectSelectorMode.LIST,
+                        )
+                    ),
+                }
+            ),
+        )
+
     async def async_step_location(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -169,8 +221,13 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
             self._site_name = user_input.get(CONF_SITE_NAME, "Home")
             self._grid_region = user_input.get(CONF_GRID_REGION, "NO1")
 
-            # Move to device selection
-            return await self.async_step_devices()
+            # Route based on installation mode
+            if self._installation_mode == INSTALLATION_MODE_SIMULATION:
+                # Simulation mode: skip device discovery, go to simulation options
+                return await self.async_step_simulation()
+            else:
+                # Real device mode: go to device selection
+                return await self.async_step_devices()
 
         # Get HA location info if available
         ha_location = self.hass.config.location_name or "Home"
@@ -202,7 +259,7 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_devices(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle device selection step."""
+        """Handle device selection step (only in Real Device mode)."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -211,8 +268,9 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
             if not self._selected_entities:
                 errors["base"] = "no_devices_selected"
             else:
-                # Move to simulation configuration step
-                return await self.async_step_simulation()
+                # In real mode, go directly to registration (no simulation)
+                self._enable_simulation = False
+                return await self._async_register_and_complete()
 
         # Discover devices
         discovery = AmperaDeviceDiscovery(self.hass)
@@ -264,19 +322,26 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_simulation(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle simulation configuration step (optional).
+        """Handle simulation configuration step (only in Simulation mode).
 
-        Allows users to enable household appliance simulation for demos
-        without needing an actual Ampæra backend connection.
+        In simulation mode, this configures the simulated household:
+        - Household profile (affects consumption patterns)
+        - Water heater type (dumb vs smart)
+
+        No device discovery happens - devices are created by simulation.
         """
         if user_input is not None:
-            self._enable_simulation = user_input.get(CONF_ENABLE_SIMULATION, False)
+            # In simulation mode, simulation is always enabled
+            self._enable_simulation = True
             self._simulation_profile = user_input.get(
                 CONF_SIMULATION_HOUSEHOLD_PROFILE, "family"
             )
             self._simulation_wh_type = user_input.get(
                 CONF_SIMULATION_WATER_HEATER_TYPE, "smart"
             )
+
+            # No devices selected in simulation mode - simulation creates them
+            self._selected_entities = []
 
             # Proceed to registration
             return await self._async_register_and_complete()
@@ -293,14 +358,13 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
             for code, name in SIMULATION_WH_TYPES
         ]
 
+        # In simulation mode, show configuration without enable checkbox
+        # (simulation is always enabled when this step is shown)
         return self.async_show_form(
             step_id="simulation",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(
-                        CONF_ENABLE_SIMULATION, default=False
-                    ): bool,
-                    vol.Optional(
+                    vol.Required(
                         CONF_SIMULATION_HOUSEHOLD_PROFILE, default="family"
                     ): SelectSelector(
                         SelectSelectorConfig(
@@ -308,7 +372,7 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
                             mode=SelectSelectorMode.DROPDOWN,
                         )
                     ),
-                    vol.Optional(
+                    vol.Required(
                         CONF_SIMULATION_WATER_HEATER_TYPE, default="smart"
                     ): SelectSelector(
                         SelectSelectorConfig(
@@ -343,13 +407,22 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
             _LOGGER.info("Registered site: %s", self._site_id)
 
             # Prepare device data for registration
-            discovery = AmperaDeviceDiscovery(self.hass)
-            devices_to_register = discovery.get_devices_by_ids(self._selected_entities)
+            # In simulation mode, no devices are selected - simulation creates them
+            if self._selected_entities:
+                discovery = AmperaDeviceDiscovery(self.hass)
+                devices_to_register = discovery.get_devices_by_ids(
+                    self._selected_entities
+                )
+                device_data = [d.to_dict() for d in devices_to_register]
+            else:
+                device_data = []
 
-            device_data = [d.to_dict() for d in devices_to_register]
-
-            # Register devices
-            _LOGGER.info("Registering %d devices", len(device_data))
+            # Register devices (may be empty in simulation mode)
+            _LOGGER.info(
+                "Registering %d devices (mode: %s)",
+                len(device_data),
+                self._installation_mode,
+            )
             devices_response = await client.async_register_devices(
                 site_id=self._site_id,
                 devices=device_data,
@@ -364,8 +437,10 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
             self._abort_if_unique_id_configured()
 
             # Create the config entry
+            # Include installation mode badge in title for clarity
+            title_suffix = " (Simulation)" if self._installation_mode == INSTALLATION_MODE_SIMULATION else ""
             return self.async_create_entry(
-                title=self._site_name,
+                title=f"{self._site_name}{title_suffix}",
                 data={
                     CONF_API_KEY: self._api_key,
                     CONF_API_URL: self._api_url,
@@ -375,7 +450,9 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_HA_INSTANCE_ID: self._ha_instance_id,
                     CONF_SELECTED_ENTITIES: self._selected_entities,
                     CONF_DEVICE_MAPPINGS: self._device_mappings,
-                    # Simulation config
+                    # Installation mode - mutually exclusive
+                    CONF_INSTALLATION_MODE: self._installation_mode,
+                    # Simulation config (only used in simulation mode)
                     CONF_ENABLE_SIMULATION: self._enable_simulation,
                     CONF_SIMULATION_HOUSEHOLD_PROFILE: self._simulation_profile,
                     CONF_SIMULATION_WATER_HEATER_TYPE: self._simulation_wh_type,
@@ -394,8 +471,11 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
         finally:
             await client.close()
 
-        # If we got here, there was an error - go back to devices step
-        return await self.async_step_devices()
+        # If we got here, there was an error - go back to appropriate step
+        if self._installation_mode == INSTALLATION_MODE_SIMULATION:
+            return await self.async_step_simulation()
+        else:
+            return await self.async_step_devices()
 
     async def async_step_reauth(
         self,
@@ -451,25 +531,31 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(
-        config_entry: ConfigEntry,  # noqa: ARG004 - required by HA
+        config_entry: ConfigEntry,
     ) -> OptionsFlow:
         """Get the options flow for this handler."""
-        return AmperaOptionsFlow()
+        return AmperaOptionsFlow(config_entry)
 
 
 class AmperaOptionsFlow(OptionsFlow):
     """Handle options flow for Ampæra Energy.
 
-    Allows users to configure:
-    - Telemetry push interval
-    - Command polling interval
-    - Voltage sensor visibility
-    - Developer mode (simulation dashboard)
-    - Household simulation settings
+    Options available depend on installation mode:
+    - Real Device Mode: Polling intervals, voltage sensors, dev mode
+    - Simulation Mode: Household profile, water heater type
+
+    Installation mode cannot be changed after setup - users must
+    reconfigure the integration to switch modes.
     """
 
-    # Note: config_entry is provided by the base OptionsFlow class
-    # Do NOT set self.config_entry in __init__ - it's a read-only property
+    def __init__(self, config_entry: ConfigEntry) -> None:
+        """Initialize options flow."""
+        self._config_entry = config_entry
+
+    @property
+    def config_entry(self) -> ConfigEntry:
+        """Return the config entry for this flow."""
+        return self._config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -482,82 +568,82 @@ class AmperaOptionsFlow(OptionsFlow):
         current_options = self.config_entry.options
         entry_data = self.config_entry.data
 
-        # Build profile options
-        profile_options = [
-            SelectOptionDict(value=code, label=name)
-            for code, name in SIMULATION_PROFILES
-        ]
+        # Check installation mode
+        installation_mode = entry_data.get(
+            CONF_INSTALLATION_MODE, INSTALLATION_MODE_REAL
+        )
+        is_simulation_mode = installation_mode == INSTALLATION_MODE_SIMULATION
 
-        # Build water heater type options
-        wh_type_options = [
-            SelectOptionDict(value=code, label=name)
-            for code, name in SIMULATION_WH_TYPES
-        ]
+        # Build common schema fields (available in both modes)
+        schema_fields: dict[vol.Marker, Any] = {
+            vol.Optional(
+                CONF_POLLING_INTERVAL,
+                default=current_options.get(
+                    CONF_POLLING_INTERVAL, DEFAULT_POLLING_INTERVAL
+                ),
+            ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
+            vol.Optional(
+                CONF_COMMAND_POLL_INTERVAL,
+                default=current_options.get(
+                    CONF_COMMAND_POLL_INTERVAL, DEFAULT_COMMAND_POLL_INTERVAL
+                ),
+            ): vol.All(vol.Coerce(int), vol.Range(min=5, max=60)),
+            vol.Optional(
+                CONF_DEVICE_SYNC_INTERVAL,
+                default=current_options.get(
+                    CONF_DEVICE_SYNC_INTERVAL, DEFAULT_DEVICE_SYNC_INTERVAL
+                ),
+            ): vol.All(vol.Coerce(int), vol.Range(min=60, max=3600)),
+            vol.Optional(
+                CONF_DEV_MODE,
+                default=current_options.get(CONF_DEV_MODE, False),
+            ): bool,
+        }
+
+        # Add mode-specific options
+        if is_simulation_mode:
+            # Simulation mode: show simulation options (always enabled)
+            profile_options = [
+                SelectOptionDict(value=code, label=name)
+                for code, name in SIMULATION_PROFILES
+            ]
+            wh_type_options = [
+                SelectOptionDict(value=code, label=name)
+                for code, name in SIMULATION_WH_TYPES
+            ]
+
+            schema_fields[vol.Optional(
+                CONF_SIMULATION_HOUSEHOLD_PROFILE,
+                default=current_options.get(
+                    CONF_SIMULATION_HOUSEHOLD_PROFILE,
+                    entry_data.get(CONF_SIMULATION_HOUSEHOLD_PROFILE, "family"),
+                ),
+            )] = SelectSelector(
+                SelectSelectorConfig(
+                    options=profile_options,
+                    mode=SelectSelectorMode.DROPDOWN,
+                )
+            )
+            schema_fields[vol.Optional(
+                CONF_SIMULATION_WATER_HEATER_TYPE,
+                default=current_options.get(
+                    CONF_SIMULATION_WATER_HEATER_TYPE,
+                    entry_data.get(CONF_SIMULATION_WATER_HEATER_TYPE, "smart"),
+                ),
+            )] = SelectSelector(
+                SelectSelectorConfig(
+                    options=wh_type_options,
+                    mode=SelectSelectorMode.DROPDOWN,
+                )
+            )
+        else:
+            # Real device mode: show voltage sensor option
+            schema_fields[vol.Optional(
+                CONF_ENABLE_VOLTAGE_SENSORS,
+                default=current_options.get(CONF_ENABLE_VOLTAGE_SENSORS, False),
+            )] = bool
 
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema(
-                {
-                    vol.Optional(
-                        CONF_POLLING_INTERVAL,
-                        default=current_options.get(
-                            CONF_POLLING_INTERVAL, DEFAULT_POLLING_INTERVAL
-                        ),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
-                    vol.Optional(
-                        CONF_COMMAND_POLL_INTERVAL,
-                        default=current_options.get(
-                            CONF_COMMAND_POLL_INTERVAL, DEFAULT_COMMAND_POLL_INTERVAL
-                        ),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=5, max=60)),
-                    vol.Optional(
-                        CONF_DEVICE_SYNC_INTERVAL,
-                        default=current_options.get(
-                            CONF_DEVICE_SYNC_INTERVAL, DEFAULT_DEVICE_SYNC_INTERVAL
-                        ),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=60, max=3600)),
-                    vol.Optional(
-                        CONF_ENABLE_VOLTAGE_SENSORS,
-                        default=current_options.get(
-                            CONF_ENABLE_VOLTAGE_SENSORS, False
-                        ),
-                    ): bool,
-                    vol.Optional(
-                        CONF_DEV_MODE,
-                        default=current_options.get(CONF_DEV_MODE, False),
-                    ): bool,
-                    # Simulation options
-                    vol.Optional(
-                        CONF_ENABLE_SIMULATION,
-                        default=current_options.get(
-                            CONF_ENABLE_SIMULATION,
-                            entry_data.get(CONF_ENABLE_SIMULATION, False),
-                        ),
-                    ): bool,
-                    vol.Optional(
-                        CONF_SIMULATION_HOUSEHOLD_PROFILE,
-                        default=current_options.get(
-                            CONF_SIMULATION_HOUSEHOLD_PROFILE,
-                            entry_data.get(CONF_SIMULATION_HOUSEHOLD_PROFILE, "family"),
-                        ),
-                    ): SelectSelector(
-                        SelectSelectorConfig(
-                            options=profile_options,
-                            mode=SelectSelectorMode.DROPDOWN,
-                        )
-                    ),
-                    vol.Optional(
-                        CONF_SIMULATION_WATER_HEATER_TYPE,
-                        default=current_options.get(
-                            CONF_SIMULATION_WATER_HEATER_TYPE,
-                            entry_data.get(CONF_SIMULATION_WATER_HEATER_TYPE, "smart"),
-                        ),
-                    ): SelectSelector(
-                        SelectSelectorConfig(
-                            options=wh_type_options,
-                            mode=SelectSelectorMode.DROPDOWN,
-                        )
-                    ),
-                }
-            ),
+            data_schema=vol.Schema(schema_fields),
         )

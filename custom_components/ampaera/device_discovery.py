@@ -125,6 +125,10 @@ KNOWN_EV_CHARGER_INTEGRATIONS = {
     "easee": "Easee",           # Most popular in Norway
     "zaptec": "Zaptec",         # Strong in Norway
     "garo": "GARO",             # Swedish, popular in Nordics
+    # Scandinavian/Nordic brands
+    "elko": "ELKO",             # Norwegian brand
+    "ctek": "CTEK",             # Swedish, popular in Scandinavia
+    "charge_amps": "Charge Amps",  # Swedish
     # European/International
     "wallbox": "Wallbox",
     "ocpp": "OCPP",             # Open Charge Point Protocol
@@ -134,33 +138,57 @@ KNOWN_EV_CHARGER_INTEGRATIONS = {
     "hypervolt": "Hypervolt",
     "go_echarger": "go-e Charger",
     "evbox": "EVBox",
-    "charge_amps": "Charge Amps",
     "alfen": "Alfen",
+    "abb": "ABB Terra",         # Popular in commercial/residential
+    "schneider_evlink": "Schneider EVlink",
+    "enelion": "Enelion",
+    "keba": "KEBA KeContact",
+    "mennekes": "MENNEKES",
 }
 
 KNOWN_WATER_HEATER_INTEGRATIONS = {
-    # Norwegian market
+    # Norwegian market leaders
+    "hoiax": "Høiax",           # Norwegian brand, market leader
+    "oso": "OSO",               # Norwegian water heater brand
     "ouman": "Ouman",           # Finnish, popular in Nordics
+    "mill": "Mill",             # Norwegian heating brand
+    "adax": "Adax",             # Norwegian heating brand
+    "nobo": "Nobø",             # Norwegian heating (Glen Dimplex)
+    "glen_dimplex": "Glen Dimplex",  # Owns Nobø, popular in Nordics
     "sensibo": "Sensibo",       # Can control water heaters
-    "mill": "Mill",             # Norwegian brand
-    # Generic
+    # Generic/International
     "generic_thermostat": "Generic Thermostat",
     "aquanta": "Aquanta",
     "rheem": "Rheem",
     "ao_smith": "A.O. Smith",
+    "bosch_shc": "Bosch Smart Home",
+    "netatmo": "Netatmo",       # Smart thermostat
+    "tado": "tado°",            # Smart thermostat
 }
 
 KNOWN_POWER_METER_INTEGRATIONS = {
     # Norwegian AMS/HAN integrations
-    "tibber": "Tibber",         # Tibber Pulse
+    "tibber": "Tibber",         # Tibber Pulse - most popular in Norway
     "elvia": "Elvia",           # Local utility
     "amshan": "AMS/HAN",        # Generic AMS reader
+    "futurehome": "Futurehome", # Norwegian smart home system
+    "heatit": "Heatit",         # Norwegian brand
+    # Nordic/European P1 meters
     "p1_monitor": "P1 Monitor",
-    # International
+    "homewizard": "HomeWizard", # Popular P1 meter
+    "dsmr": "DSMR",             # Dutch Smart Meter Requirements (P1)
+    "ams_reader": "AMS Reader", # Generic AMS/HAN reader
+    # International smart plugs with power monitoring
     "shelly": "Shelly",
     "tasmota": "Tasmota",
     "tuya": "Tuya",
     "sonoff": "Sonoff",
+    "athom": "Athom",           # Smart plugs with power monitoring
+    "nous": "NOUS",             # Smart plugs with power monitoring
+    # Energy monitoring systems
+    "iotawatt": "IoTaWatt",
+    "emporia_vue": "Emporia Vue",
+    "sense": "Sense",
 }
 
 # =============================================================================
@@ -211,9 +239,35 @@ EV_CHARGER_SIGNALS = {
 # =============================================================================
 # Used when both integration and signal detection fail.
 
-EV_CHARGER_KEYWORDS = {"charger", "ev", "easee", "zaptec", "wallbox", "lader", "elbil"}
-AMS_KEYWORDS = {"ams", "han", "meter", "strømmåler", "power consumption"}
-WATER_HEATER_KEYWORDS = {"water heater", "varmtvannsbereder", "boiler", "hot water"}
+# Keywords for EV charger detection (Norwegian and English)
+EV_CHARGER_KEYWORDS = {
+    # English
+    "charger", "ev", "ev_charger", "electric vehicle",
+    # Brand names
+    "easee", "zaptec", "wallbox", "garo", "ctek", "charge_amps",
+    # Norwegian
+    "lader", "elbillader", "elbil", "ladestasjon",
+}
+
+# Keywords for AMS/power meter detection (Norwegian and English)
+AMS_KEYWORDS = {
+    # Technical terms
+    "ams", "han", "meter", "power_meter", "energy_meter",
+    # Norwegian
+    "strømmåler", "strøm", "effekt", "forbruk",
+    # Brand/protocol
+    "tibber", "p1", "obis", "dsmr",
+}
+
+# Keywords for water heater detection (Norwegian and English)
+WATER_HEATER_KEYWORDS = {
+    # English
+    "water heater", "water_heater", "boiler", "hot water", "hot_water",
+    # Norwegian
+    "varmtvannsbereder", "bereder", "varmtvann", "varmt vann",
+    # Brand names
+    "hoiax", "høiax", "oso",
+}
 
 
 class AmperaDeviceDiscovery:

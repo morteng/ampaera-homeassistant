@@ -33,6 +33,9 @@ COMMAND_TURN_ON = "turn_on"
 COMMAND_TURN_OFF = "turn_off"
 COMMAND_SET_TEMPERATURE = "set_temperature"
 COMMAND_SET_MODE = "set_mode"
+COMMAND_SET_CURRENT_LIMIT = "set_current_limit"  # EV charger current limit
+COMMAND_START_CHARGE = "start_charge"  # EV charger start charging
+COMMAND_STOP_CHARGE = "stop_charge"  # EV charger stop charging
 
 
 class AmperaCommandService:
@@ -71,9 +74,99 @@ class AmperaCommandService:
         # Reverse mapping: Ampæra device_id → HA entity_id
         self._reverse_mappings = {v: k for k, v in device_mappings.items()}
 
+        # Entity mapping by device - populated from config entry
+        # Maps: device_id → {capability → entity_id}
+        self._entity_mappings: dict[str, dict[str, str]] = {}
+
         # Polling task
         self._poll_task: asyncio.Task | None = None
         self._running = False
+
+    def set_entity_mappings(self, mappings: dict[str, dict[str, str]]) -> None:
+        """Set entity mappings for command routing.
+
+        Args:
+            mappings: Dict of device_id → {capability → entity_id}
+        """
+        self._entity_mappings = mappings
+        _LOGGER.debug("Updated entity mappings for %d devices", len(mappings))
+
+    def _resolve_entity_for_command(
+        self,
+        ha_entity_id: str | None,
+        device_id: str | None,
+        command_type: str,
+    ) -> str | None:
+        """Resolve the correct HA entity for a command type.
+
+        Different commands target different entities:
+        - turn_on/turn_off → on_off capability (switch)
+        - set_temperature → temperature or input_number helper
+        - set_mode → mode input_select helper
+        - set_current_limit → current_limit input_number
+
+        Args:
+            ha_entity_id: Entity ID from API (may be sensor)
+            device_id: Ampæra device UUID
+            command_type: Command type (turn_on, turn_off, etc.)
+
+        Returns:
+            Resolved entity ID, or original if no mapping found
+        """
+        if not device_id:
+            return ha_entity_id
+
+        # Check if we have entity mappings for this device
+        device_mapping = self._entity_mappings.get(device_id, {})
+
+        # Map command type to capability
+        command_to_capability = {
+            COMMAND_TURN_ON: "on_off",
+            COMMAND_TURN_OFF: "on_off",
+            COMMAND_SET_TEMPERATURE: "temperature",
+            COMMAND_SET_MODE: "mode",
+            COMMAND_SET_CURRENT_LIMIT: "current",
+            COMMAND_START_CHARGE: "on_off",  # Start/stop charge uses on_off switch
+            COMMAND_STOP_CHARGE: "on_off",
+        }
+
+        capability = command_to_capability.get(command_type)
+        if capability and capability in device_mapping:
+            resolved = device_mapping[capability]
+            if resolved != ha_entity_id:
+                _LOGGER.debug(
+                    "Resolved entity for %s: %s → %s",
+                    command_type,
+                    ha_entity_id,
+                    resolved,
+                )
+            return resolved
+
+        # Fallback: try to find a switch for on/off commands (including start/stop charge)
+        if command_type in (
+            COMMAND_TURN_ON,
+            COMMAND_TURN_OFF,
+            COMMAND_START_CHARGE,
+            COMMAND_STOP_CHARGE,
+        ):
+            # Look for switch in device mapping
+            if "on_off" in device_mapping:
+                return device_mapping["on_off"]
+
+            # Try to derive switch from sensor entity
+            if ha_entity_id and ha_entity_id.startswith("sensor."):
+                # sensor.water_heater_power → switch.water_heater_switch
+                base_name = ha_entity_id.replace("sensor.", "").replace("_power", "").replace("_temperature", "")
+                switch_entity = f"switch.{base_name}_switch"
+                if self._hass.states.get(switch_entity):
+                    _LOGGER.debug(
+                        "Derived switch entity: %s → %s",
+                        ha_entity_id,
+                        switch_entity,
+                    )
+                    return switch_entity
+
+        return ha_entity_id
 
     @property
     def is_running(self) -> bool:
@@ -173,6 +266,12 @@ class AmperaCommandService:
         # Resolve entity ID if not provided
         if not ha_entity_id and device_id:
             ha_entity_id = self._reverse_mappings.get(device_id)
+
+        # Resolve correct entity based on command type
+        # The API may send the primary entity, but we need the right entity for the command
+        ha_entity_id = self._resolve_entity_for_command(
+            ha_entity_id, device_id, command_type
+        )
 
         if not ha_entity_id:
             await self._ack_command(
@@ -277,6 +376,37 @@ class AmperaCommandService:
                     },
                     blocking=True,
                 )
+            elif domain == "input_number":
+                # Support for simulated devices using input_number helpers
+                await self._hass.services.async_call(
+                    "input_number",
+                    "set_value",
+                    {
+                        ATTR_ENTITY_ID: entity_id,
+                        "value": target_temp,
+                    },
+                    blocking=True,
+                )
+            elif domain == "switch":
+                # Simulated water heater switch - try to find related input_number
+                # Convention: switch.sim_water_heater_switch → input_number.water_heater_target_temp
+                temp_entity = await self._find_simulation_helper(
+                    entity_id, "input_number", "target_temp"
+                )
+                if temp_entity:
+                    await self._hass.services.async_call(
+                        "input_number",
+                        "set_value",
+                        {
+                            ATTR_ENTITY_ID: temp_entity,
+                            "value": target_temp,
+                        },
+                        blocking=True,
+                    )
+                else:
+                    raise ValueError(
+                        f"set_temperature not supported for {entity_id} (no helper found)"
+                    )
             else:
                 raise ValueError(
                     f"set_temperature not supported for domain {domain}"
@@ -307,13 +437,249 @@ class AmperaCommandService:
                     },
                     blocking=True,
                 )
+            elif domain == "input_select":
+                # Support for simulated devices using input_select helpers
+                await self._hass.services.async_call(
+                    "input_select",
+                    "select_option",
+                    {
+                        ATTR_ENTITY_ID: entity_id,
+                        "option": mode,
+                    },
+                    blocking=True,
+                )
+            elif domain == "switch":
+                # Simulated water heater switch - try to find related input_select
+                # Convention: switch.sim_water_heater_switch → input_select.water_heater_mode
+                mode_entity = await self._find_simulation_helper(
+                    entity_id, "input_select", "mode"
+                )
+                if mode_entity:
+                    await self._hass.services.async_call(
+                        "input_select",
+                        "select_option",
+                        {
+                            ATTR_ENTITY_ID: mode_entity,
+                            "option": mode,
+                        },
+                        blocking=True,
+                    )
+                else:
+                    raise ValueError(
+                        f"set_mode not supported for {entity_id} (no helper found)"
+                    )
             else:
                 raise ValueError(
                     f"set_mode not supported for domain {domain}"
                 )
 
+        elif command_type == COMMAND_SET_CURRENT_LIMIT:
+            current_limit = parameters.get("current_limit_a")
+            if current_limit is None:
+                raise ValueError("Missing current_limit_a parameter")
+
+            # EV chargers - check for native integration service or use input_number
+            if domain == "switch":
+                # Simulated EV charger - find related input_number
+                limit_entity = await self._find_simulation_helper(
+                    entity_id, "input_number", "current_limit"
+                )
+                if limit_entity:
+                    await self._hass.services.async_call(
+                        "input_number",
+                        "set_value",
+                        {
+                            ATTR_ENTITY_ID: limit_entity,
+                            "value": current_limit,
+                        },
+                        blocking=True,
+                    )
+                else:
+                    raise ValueError(
+                        f"set_current_limit not supported for {entity_id} (no helper found)"
+                    )
+            elif domain == "sensor":
+                # Entity mapping points to sensor - try to find corresponding input_number
+                # sensor.ev_charger_current_limit → input_number.ev_charger_current_limit
+                input_entity = entity_id.replace("sensor.", "input_number.")
+                if self._hass.states.get(input_entity):
+                    _LOGGER.debug(
+                        "Resolved sensor to input_number: %s → %s",
+                        entity_id,
+                        input_entity,
+                    )
+                    await self._hass.services.async_call(
+                        "input_number",
+                        "set_value",
+                        {
+                            ATTR_ENTITY_ID: input_entity,
+                            "value": current_limit,
+                        },
+                        blocking=True,
+                    )
+                else:
+                    raise ValueError(
+                        f"set_current_limit not supported for {entity_id} (no input_number found)"
+                    )
+            elif domain == "input_number":
+                # Direct input_number control
+                await self._hass.services.async_call(
+                    "input_number",
+                    "set_value",
+                    {
+                        ATTR_ENTITY_ID: entity_id,
+                        "value": current_limit,
+                    },
+                    blocking=True,
+                )
+            else:
+                # Native EV charger integrations may have specific services
+                # Try common patterns
+                try:
+                    await self._hass.services.async_call(
+                        domain,
+                        "set_charging_current",
+                        {
+                            ATTR_ENTITY_ID: entity_id,
+                            "current": current_limit,
+                        },
+                        blocking=True,
+                    )
+                except Exception:
+                    raise ValueError(
+                        f"set_current_limit not supported for domain {domain}"
+                    )
+
+        elif command_type == COMMAND_START_CHARGE:
+            # Start charging - turn on the charger switch
+            # For simulated EV chargers, this just turns on the switch
+            # For real EV chargers with native integrations, may need specific service
+            if domain == "switch":
+                await self._hass.services.async_call(
+                    "switch",
+                    SERVICE_TURN_ON,
+                    {ATTR_ENTITY_ID: entity_id},
+                    blocking=True,
+                )
+            elif domain == "input_boolean":
+                await self._hass.services.async_call(
+                    "input_boolean",
+                    SERVICE_TURN_ON,
+                    {ATTR_ENTITY_ID: entity_id},
+                    blocking=True,
+                )
+            else:
+                # Try native EV charger service
+                try:
+                    await self._hass.services.async_call(
+                        domain,
+                        "start_charging",
+                        {ATTR_ENTITY_ID: entity_id},
+                        blocking=True,
+                    )
+                except Exception:
+                    raise ValueError(
+                        f"start_charge not supported for domain {domain}"
+                    )
+
+        elif command_type == COMMAND_STOP_CHARGE:
+            # Stop charging - turn off the charger switch
+            if domain == "switch":
+                await self._hass.services.async_call(
+                    "switch",
+                    SERVICE_TURN_OFF,
+                    {ATTR_ENTITY_ID: entity_id},
+                    blocking=True,
+                )
+            elif domain == "input_boolean":
+                await self._hass.services.async_call(
+                    "input_boolean",
+                    SERVICE_TURN_OFF,
+                    {ATTR_ENTITY_ID: entity_id},
+                    blocking=True,
+                )
+            else:
+                # Try native EV charger service
+                try:
+                    await self._hass.services.async_call(
+                        domain,
+                        "stop_charging",
+                        {ATTR_ENTITY_ID: entity_id},
+                        blocking=True,
+                    )
+                except Exception:
+                    raise ValueError(
+                        f"stop_charge not supported for domain {domain}"
+                    )
+
         else:
             raise ValueError(f"Unknown command type: {command_type}")
+
+    async def _find_simulation_helper(
+        self,
+        source_entity_id: str,
+        target_domain: str,
+        suffix_hint: str,
+    ) -> str | None:
+        """Find a related simulation helper entity.
+
+        Uses naming conventions to find input helpers related to a simulated device.
+        For example: switch.sim_water_heater_switch → input_number.water_heater_target_temp
+
+        Args:
+            source_entity_id: The entity being controlled (e.g., switch.sim_water_heater_switch)
+            target_domain: The domain to search (e.g., input_number, input_select)
+            suffix_hint: Hint for what to look for (e.g., "target_temp", "mode")
+
+        Returns:
+            Entity ID of the helper, or None if not found
+        """
+        # Extract base name from source entity
+        # switch.sim_water_heater_switch → water_heater
+        source_name = source_entity_id.split(".", 1)[1] if "." in source_entity_id else source_entity_id
+
+        # Remove common prefixes/suffixes
+        base_name = source_name
+        for prefix in ("sim_", "simulated_"):
+            if base_name.startswith(prefix):
+                base_name = base_name[len(prefix):]
+        for suffix in ("_switch", "_sensor", "_entity"):
+            if base_name.endswith(suffix):
+                base_name = base_name[:-len(suffix)]
+
+        # Try different naming patterns
+        candidates = [
+            f"{target_domain}.{base_name}_{suffix_hint}",  # input_number.water_heater_target_temp
+            f"{target_domain}.{base_name}_{suffix_hint.replace('_', '')}",  # input_number.water_heater_targettemp
+            f"{target_domain}.sim_{base_name}_{suffix_hint}",  # input_number.sim_water_heater_target_temp
+        ]
+
+        # For mode, also try status (EV chargers use "status" instead of "mode")
+        if suffix_hint == "mode":
+            candidates.append(f"{target_domain}.{base_name}_mode")  # input_select.water_heater_mode
+            candidates.append(f"{target_domain}.{base_name}_status")  # input_select.ev_charger_status
+
+        # For temperature, also try current_temp
+        if suffix_hint == "target_temp":
+            candidates.append(f"{target_domain}.{base_name}_current_temp")  # input_number.water_heater_current_temp
+            # EV chargers might have current_limit instead of temp
+            candidates.append(f"{target_domain}.{base_name}_current_limit")  # input_number.ev_charger_current_limit
+
+        for candidate in candidates:
+            if self._hass.states.get(candidate):
+                _LOGGER.debug(
+                    "Found simulation helper %s for %s",
+                    candidate,
+                    source_entity_id,
+                )
+                return candidate
+
+        _LOGGER.warning(
+            "No simulation helper found for %s (tried: %s)",
+            source_entity_id,
+            candidates,
+        )
+        return None
 
     def _get_device_state(self, entity_id: str) -> dict[str, Any] | None:
         """Get current device state from Home Assistant.
@@ -346,6 +712,8 @@ class AmperaCommandService:
 
         elif domain == "switch":
             device_state["is_on"] = state.state == "on"
+            # For simulated switches, try to get related helper state
+            self._enrich_switch_state_from_helpers(entity_id, device_state)
 
         elif domain == "sensor":
             # Include the sensor value
@@ -355,7 +723,94 @@ class AmperaCommandService:
                 except ValueError:
                     device_state["value"] = state.state
 
+        elif domain == "input_number":
+            # Input number helper - return value
+            if state.state not in ("unavailable", "unknown"):
+                try:
+                    device_state["value"] = float(state.state)
+                except ValueError:
+                    pass
+
+        elif domain == "input_select":
+            # Input select helper - return current option as mode
+            if state.state not in ("unavailable", "unknown"):
+                device_state["operation_mode"] = state.state
+
+        elif domain == "input_boolean":
+            # Input boolean helper - return on/off state
+            device_state["is_on"] = state.state == "on"
+
         return device_state
+
+    def _enrich_switch_state_from_helpers(
+        self, switch_entity_id: str, device_state: dict[str, Any]
+    ) -> None:
+        """Enrich switch state with data from related simulation helpers.
+
+        For simulated devices, looks up related input helpers and adds their
+        values to the device state.
+
+        Args:
+            switch_entity_id: The switch entity ID
+            device_state: State dict to enrich (modified in place)
+        """
+        # Extract base name
+        source_name = switch_entity_id.split(".", 1)[1] if "." in switch_entity_id else switch_entity_id
+        base_name = source_name
+        for prefix in ("sim_", "simulated_"):
+            if base_name.startswith(prefix):
+                base_name = base_name[len(prefix):]
+        for suffix in ("_switch", "_sensor", "_entity"):
+            if base_name.endswith(suffix):
+                base_name = base_name[:-len(suffix)]
+
+        # Try to find related temperature helper
+        for temp_suffix in ("_current_temp", "_target_temp", "_temp"):
+            temp_entity = f"input_number.{base_name}{temp_suffix}"
+            temp_state = self._hass.states.get(temp_entity)
+            if temp_state and temp_state.state not in ("unavailable", "unknown"):
+                try:
+                    if "current" in temp_suffix:
+                        device_state["temperature"] = float(temp_state.state)
+                    else:
+                        device_state["target_temperature"] = float(temp_state.state)
+                except ValueError:
+                    pass
+
+        # Try to find related mode helper (water heater uses "mode", EV uses "status")
+        for mode_suffix in ("_mode", "_status"):
+            mode_entity = f"input_select.{base_name}{mode_suffix}"
+            mode_state = self._hass.states.get(mode_entity)
+            if mode_state and mode_state.state not in ("unavailable", "unknown"):
+                device_state["operation_mode"] = mode_state.state
+                break
+
+        # Try to find EV charger current limit
+        limit_entity = f"input_number.{base_name}_current_limit"
+        limit_state = self._hass.states.get(limit_entity)
+        if limit_state and limit_state.state not in ("unavailable", "unknown"):
+            try:
+                device_state["current_limit_a"] = float(limit_state.state)
+            except ValueError:
+                pass
+
+        # Try to find EV charger session energy
+        session_entity = f"input_number.{base_name}_session_energy"
+        session_state = self._hass.states.get(session_entity)
+        if session_state and session_state.state not in ("unavailable", "unknown"):
+            try:
+                device_state["session_energy_kwh"] = float(session_state.state)
+            except ValueError:
+                pass
+
+        # Try to find power helper
+        power_entity = f"input_number.{base_name}_power"
+        power_state = self._hass.states.get(power_entity)
+        if power_state and power_state.state not in ("unavailable", "unknown"):
+            try:
+                device_state["power_w"] = float(power_state.state)
+            except ValueError:
+                pass
 
     async def _ack_command(
         self,

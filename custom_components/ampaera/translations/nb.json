@@ -9,6 +9,16 @@
           "api_url": "API-URL (valgfritt, for utvikling)"
         }
       },
+      "mode": {
+        "title": "Installasjonsmodus",
+        "description": "Velg hvordan du vil bruke Ampæra. **Fysiske enheter** kobler til dine faktiske smartenheter (elbillader, varmtvannsbereder osv.). **Simulering** oppretter demo-enheter for testing uten å påvirke ekte maskinvare. Disse modusene er gjensidig utelukkende.",
+        "data": {
+          "installation_mode": "Installasjonsmodus"
+        },
+        "data_description": {
+          "installation_mode": "Fysiske enheter: Produksjonsbruk med ekte enheter. Simulering: Demo/testing med simulerte enheter."
+        }
+      },
       "location": {
         "title": "Konfigurer sted",
         "description": "Angi stedsnavn og velg din nettregion for riktig spotprising.",
@@ -19,21 +29,19 @@
       },
       "devices": {
         "title": "Velg enheter",
-        "description": "Velg hvilke Home Assistant-enheter som skal synkroniseres med Ampæra. Fant {device_count} kompatible enheter.",
+        "description": "Velg hvilke Home Assistant-enheter som skal synkroniseres med Ampæra. Fant {device_count} kompatible enheter. Kun ekte fysiske enheter vises - ingen simulerte enheter.",
         "data": {
           "selected_entities": "Enheter å synkronisere"
         }
       },
       "simulation": {
-        "title": "Husholdningssimulering (Valgfritt)",
-        "description": "Aktiver realistisk strømforbrukssimulering for demoner og testing. Dette oppretter simulerte apparater (oppvaskmaskin, stekeovn, vaskemaskin osv.) som følger norske daglige mønstre - alt kjører lokalt i Home Assistant.",
+        "title": "Konfigurer simulering",
+        "description": "Konfigurer din simulerte husholdning for demoner og testing. Dette oppretter realistiske apparater (oppvaskmaskin, stekeovn, vaskemaskin, varmtvannsbereder, elbillader osv.) med norske daglige forbruksmønstre - alt kjører lokalt i Home Assistant.",
         "data": {
-          "enable_simulation": "Aktiver husholdningssimulering",
           "simulation_household_profile": "Husholdningsprofil",
           "simulation_water_heater_type": "Type varmtvannsbereder"
         },
         "data_description": {
-          "enable_simulation": "Oppretter simulerte apparater med realistisk strømforbruk",
           "simulation_household_profile": "Påvirker forbruksmønster, tidspunkt og apparatbruk",
           "simulation_water_heater_type": "Gamle bereder har ingen temperatursensor, smarte har full kontroll"
         }
@@ -63,20 +71,22 @@
     "step": {
       "init": {
         "title": "Ampæra-innstillinger",
-        "description": "Konfigurer integrasjon, simulering og synkroniseringsinnstillinger.",
+        "description": "Konfigurer integrasjon og synkroniseringsinnstillinger. Tilgjengelige valg avhenger av installasjonsmodus.",
         "data": {
           "polling_interval": "Telemetri-sendeintervall (sekunder)",
           "command_poll_interval": "Kommando-hentingsintervall (sekunder)",
           "device_sync_interval": "Enhetssynkroniseringsintervall (sekunder)",
           "enable_voltage_sensors": "Inkluder spenningssensorer i telemetri",
           "dev_mode": "Utviklermodus (avansert feilsøking)",
-          "enable_simulation": "Aktiver husholdningssimulering",
           "simulation_household_profile": "Husholdningsprofil",
           "simulation_water_heater_type": "Type varmtvannsbereder"
         },
         "data_description": {
+          "polling_interval": "Hvor ofte telemetridata sendes til Ampæra",
+          "command_poll_interval": "Hvor ofte sjekkes for ventende kommandoer",
+          "device_sync_interval": "Hvor ofte synkroniseres enhetsstatus",
+          "enable_voltage_sensors": "Kun tilgjengelig i fysisk enhetsmodus",
           "dev_mode": "Viser avanserte feilsøkingsalternativer og simulerings-dashboard",
-          "enable_simulation": "Oppretter simulerte apparater med realistiske daglige mønstre",
           "simulation_household_profile": "Familie bruker mer strøm, studenter mindre, pensjonister har andre tidspunkt",
           "simulation_water_heater_type": "Gammel (enkel) vs Smart påvirker tilgjengelige kontroller og sensorer"
         }
