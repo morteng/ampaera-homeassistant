@@ -1,0 +1,12 @@
+{
+  "domain": "ampaera_sim",
+  "name": "Ampæra Simulation",
+  "codeowners": ["@morteng"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/morteng/ampaera-homeassistant",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/morteng/amp/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}

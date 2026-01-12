@@ -156,7 +156,11 @@ class AmperaCommandService:
             # Try to derive switch from sensor entity
             if ha_entity_id and ha_entity_id.startswith("sensor."):
                 # sensor.water_heater_power → switch.water_heater_switch
-                base_name = ha_entity_id.replace("sensor.", "").replace("_power", "").replace("_temperature", "")
+                base_name = (
+                    ha_entity_id.replace("sensor.", "")
+                    .replace("_power", "")
+                    .replace("_temperature", "")
+                )
                 switch_entity = f"switch.{base_name}_switch"
                 if self._hass.states.get(switch_entity):
                     _LOGGER.debug(
@@ -269,9 +273,7 @@ class AmperaCommandService:
 
         # Resolve correct entity based on command type
         # The API may send the primary entity, but we need the right entity for the command
-        ha_entity_id = self._resolve_entity_for_command(
-            ha_entity_id, device_id, command_type
-        )
+        ha_entity_id = self._resolve_entity_for_command(ha_entity_id, device_id, command_type)
 
         if not ha_entity_id:
             await self._ack_command(
@@ -408,9 +410,7 @@ class AmperaCommandService:
                         f"set_temperature not supported for {entity_id} (no helper found)"
                     )
             else:
-                raise ValueError(
-                    f"set_temperature not supported for domain {domain}"
-                )
+                raise ValueError(f"set_temperature not supported for domain {domain}")
 
         elif command_type == COMMAND_SET_MODE:
             mode = parameters.get("mode")
@@ -451,9 +451,7 @@ class AmperaCommandService:
             elif domain == "switch":
                 # Simulated water heater switch - try to find related input_select
                 # Convention: switch.sim_water_heater_switch → input_select.water_heater_mode
-                mode_entity = await self._find_simulation_helper(
-                    entity_id, "input_select", "mode"
-                )
+                mode_entity = await self._find_simulation_helper(entity_id, "input_select", "mode")
                 if mode_entity:
                     await self._hass.services.async_call(
                         "input_select",
@@ -465,13 +463,9 @@ class AmperaCommandService:
                         blocking=True,
                     )
                 else:
-                    raise ValueError(
-                        f"set_mode not supported for {entity_id} (no helper found)"
-                    )
+                    raise ValueError(f"set_mode not supported for {entity_id} (no helper found)")
             else:
-                raise ValueError(
-                    f"set_mode not supported for domain {domain}"
-                )
+                raise ValueError(f"set_mode not supported for domain {domain}")
 
         elif command_type == COMMAND_SET_CURRENT_LIMIT:
             current_limit = parameters.get("current_limit_a")
@@ -545,10 +539,10 @@ class AmperaCommandService:
                         },
                         blocking=True,
                     )
-                except Exception:
+                except Exception as err:
                     raise ValueError(
                         f"set_current_limit not supported for domain {domain}"
-                    )
+                    ) from err
 
         elif command_type == COMMAND_START_CHARGE:
             # Start charging - turn on the charger switch
@@ -577,10 +571,8 @@ class AmperaCommandService:
                         {ATTR_ENTITY_ID: entity_id},
                         blocking=True,
                     )
-                except Exception:
-                    raise ValueError(
-                        f"start_charge not supported for domain {domain}"
-                    )
+                except Exception as err:
+                    raise ValueError(f"start_charge not supported for domain {domain}") from err
 
         elif command_type == COMMAND_STOP_CHARGE:
             # Stop charging - turn off the charger switch
@@ -607,10 +599,8 @@ class AmperaCommandService:
                         {ATTR_ENTITY_ID: entity_id},
                         blocking=True,
                     )
-                except Exception:
-                    raise ValueError(
-                        f"stop_charge not supported for domain {domain}"
-                    )
+                except Exception as err:
+                    raise ValueError(f"stop_charge not supported for domain {domain}") from err
 
         else:
             raise ValueError(f"Unknown command type: {command_type}")
@@ -636,16 +626,18 @@ class AmperaCommandService:
         """
         # Extract base name from source entity
         # switch.sim_water_heater_switch → water_heater
-        source_name = source_entity_id.split(".", 1)[1] if "." in source_entity_id else source_entity_id
+        source_name = (
+            source_entity_id.split(".", 1)[1] if "." in source_entity_id else source_entity_id
+        )
 
         # Remove common prefixes/suffixes
         base_name = source_name
         for prefix in ("sim_", "simulated_"):
             if base_name.startswith(prefix):
-                base_name = base_name[len(prefix):]
+                base_name = base_name[len(prefix) :]
         for suffix in ("_switch", "_sensor", "_entity"):
             if base_name.endswith(suffix):
-                base_name = base_name[:-len(suffix)]
+                base_name = base_name[: -len(suffix)]
 
         # Try different naming patterns
         candidates = [
@@ -657,13 +649,19 @@ class AmperaCommandService:
         # For mode, also try status (EV chargers use "status" instead of "mode")
         if suffix_hint == "mode":
             candidates.append(f"{target_domain}.{base_name}_mode")  # input_select.water_heater_mode
-            candidates.append(f"{target_domain}.{base_name}_status")  # input_select.ev_charger_status
+            candidates.append(
+                f"{target_domain}.{base_name}_status"
+            )  # input_select.ev_charger_status
 
         # For temperature, also try current_temp
         if suffix_hint == "target_temp":
-            candidates.append(f"{target_domain}.{base_name}_current_temp")  # input_number.water_heater_current_temp
+            candidates.append(
+                f"{target_domain}.{base_name}_current_temp"
+            )  # input_number.water_heater_current_temp
             # EV chargers might have current_limit instead of temp
-            candidates.append(f"{target_domain}.{base_name}_current_limit")  # input_number.ev_charger_current_limit
+            candidates.append(
+                f"{target_domain}.{base_name}_current_limit"
+            )  # input_number.ev_charger_current_limit
 
         for candidate in candidates:
             if self._hass.states.get(candidate):
@@ -726,10 +724,8 @@ class AmperaCommandService:
         elif domain == "input_number":
             # Input number helper - return value
             if state.state not in ("unavailable", "unknown"):
-                try:
+                with contextlib.suppress(ValueError):
                     device_state["value"] = float(state.state)
-                except ValueError:
-                    pass
 
         elif domain == "input_select":
             # Input select helper - return current option as mode
@@ -755,14 +751,16 @@ class AmperaCommandService:
             device_state: State dict to enrich (modified in place)
         """
         # Extract base name
-        source_name = switch_entity_id.split(".", 1)[1] if "." in switch_entity_id else switch_entity_id
+        source_name = (
+            switch_entity_id.split(".", 1)[1] if "." in switch_entity_id else switch_entity_id
+        )
         base_name = source_name
         for prefix in ("sim_", "simulated_"):
             if base_name.startswith(prefix):
-                base_name = base_name[len(prefix):]
+                base_name = base_name[len(prefix) :]
         for suffix in ("_switch", "_sensor", "_entity"):
             if base_name.endswith(suffix):
-                base_name = base_name[:-len(suffix)]
+                base_name = base_name[: -len(suffix)]
 
         # Try to find related temperature helper
         for temp_suffix in ("_current_temp", "_target_temp", "_temp"):
@@ -789,28 +787,22 @@ class AmperaCommandService:
         limit_entity = f"input_number.{base_name}_current_limit"
         limit_state = self._hass.states.get(limit_entity)
         if limit_state and limit_state.state not in ("unavailable", "unknown"):
-            try:
+            with contextlib.suppress(ValueError):
                 device_state["current_limit_a"] = float(limit_state.state)
-            except ValueError:
-                pass
 
         # Try to find EV charger session energy
         session_entity = f"input_number.{base_name}_session_energy"
         session_state = self._hass.states.get(session_entity)
         if session_state and session_state.state not in ("unavailable", "unknown"):
-            try:
+            with contextlib.suppress(ValueError):
                 device_state["session_energy_kwh"] = float(session_state.state)
-            except ValueError:
-                pass
 
         # Try to find power helper
         power_entity = f"input_number.{base_name}_power"
         power_state = self._hass.states.get(power_entity)
         if power_state and power_state.state not in ("unavailable", "unknown"):
-            try:
+            with contextlib.suppress(ValueError):
                 device_state["power_w"] = float(power_state.state)
-            except ValueError:
-                pass
 
     async def _ack_command(
         self,

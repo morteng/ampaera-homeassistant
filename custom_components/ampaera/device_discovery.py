@@ -113,6 +113,11 @@ SUPPORTED_DOMAINS = {
     "climate",
 }
 
+# Integrations to exclude from discovery
+# Add integration names here to prevent their devices from syncing to Ampæra
+EXCLUDED_INTEGRATIONS: set[str] = set()
+# Example: EXCLUDED_INTEGRATIONS = {"some_test_integration"}
+
 
 # =============================================================================
 # Norwegian Market Integration Detection
@@ -121,17 +126,18 @@ SUPPORTED_DOMAINS = {
 # The integration platform name is checked against entity.platform attribute.
 
 KNOWN_EV_CHARGER_INTEGRATIONS = {
+    # NOTE: ampaera_sim intentionally NOT here - uses signal detection for accurate classification
     # Norwegian market leaders
-    "easee": "Easee",           # Most popular in Norway
-    "zaptec": "Zaptec",         # Strong in Norway
-    "garo": "GARO",             # Swedish, popular in Nordics
+    "easee": "Easee",  # Most popular in Norway
+    "zaptec": "Zaptec",  # Strong in Norway
+    "garo": "GARO",  # Swedish, popular in Nordics
     # Scandinavian/Nordic brands
-    "elko": "ELKO",             # Norwegian brand
-    "ctek": "CTEK",             # Swedish, popular in Scandinavia
+    "elko": "ELKO",  # Norwegian brand
+    "ctek": "CTEK",  # Swedish, popular in Scandinavia
     "charge_amps": "Charge Amps",  # Swedish
     # European/International
     "wallbox": "Wallbox",
-    "ocpp": "OCPP",             # Open Charge Point Protocol
+    "ocpp": "OCPP",  # Open Charge Point Protocol
     "tesla_wall_connector": "Tesla Wall Connector",
     "ohme": "Ohme",
     "myenergi": "myenergi zappi",
@@ -139,7 +145,7 @@ KNOWN_EV_CHARGER_INTEGRATIONS = {
     "go_echarger": "go-e Charger",
     "evbox": "EVBox",
     "alfen": "Alfen",
-    "abb": "ABB Terra",         # Popular in commercial/residential
+    "abb": "ABB Terra",  # Popular in commercial/residential
     "schneider_evlink": "Schneider EVlink",
     "enelion": "Enelion",
     "keba": "KEBA KeContact",
@@ -147,44 +153,46 @@ KNOWN_EV_CHARGER_INTEGRATIONS = {
 }
 
 KNOWN_WATER_HEATER_INTEGRATIONS = {
+    # NOTE: ampaera_sim intentionally NOT here - uses signal detection for accurate classification
     # Norwegian market leaders
-    "hoiax": "Høiax",           # Norwegian brand, market leader
-    "oso": "OSO",               # Norwegian water heater brand
-    "ouman": "Ouman",           # Finnish, popular in Nordics
-    "mill": "Mill",             # Norwegian heating brand
-    "adax": "Adax",             # Norwegian heating brand
-    "nobo": "Nobø",             # Norwegian heating (Glen Dimplex)
+    "hoiax": "Høiax",  # Norwegian brand, market leader
+    "oso": "OSO",  # Norwegian water heater brand
+    "ouman": "Ouman",  # Finnish, popular in Nordics
+    "mill": "Mill",  # Norwegian heating brand
+    "adax": "Adax",  # Norwegian heating brand
+    "nobo": "Nobø",  # Norwegian heating (Glen Dimplex)
     "glen_dimplex": "Glen Dimplex",  # Owns Nobø, popular in Nordics
-    "sensibo": "Sensibo",       # Can control water heaters
+    "sensibo": "Sensibo",  # Can control water heaters
     # Generic/International
     "generic_thermostat": "Generic Thermostat",
     "aquanta": "Aquanta",
     "rheem": "Rheem",
     "ao_smith": "A.O. Smith",
     "bosch_shc": "Bosch Smart Home",
-    "netatmo": "Netatmo",       # Smart thermostat
-    "tado": "tado°",            # Smart thermostat
+    "netatmo": "Netatmo",  # Smart thermostat
+    "tado": "tado°",  # Smart thermostat
 }
 
 KNOWN_POWER_METER_INTEGRATIONS = {
+    # NOTE: ampaera_sim intentionally NOT here - uses signal detection for accurate classification
     # Norwegian AMS/HAN integrations
-    "tibber": "Tibber",         # Tibber Pulse - most popular in Norway
-    "elvia": "Elvia",           # Local utility
-    "amshan": "AMS/HAN",        # Generic AMS reader
-    "futurehome": "Futurehome", # Norwegian smart home system
-    "heatit": "Heatit",         # Norwegian brand
+    "tibber": "Tibber",  # Tibber Pulse - most popular in Norway
+    "elvia": "Elvia",  # Local utility
+    "amshan": "AMS/HAN",  # Generic AMS reader
+    "futurehome": "Futurehome",  # Norwegian smart home system
+    "heatit": "Heatit",  # Norwegian brand
     # Nordic/European P1 meters
     "p1_monitor": "P1 Monitor",
-    "homewizard": "HomeWizard", # Popular P1 meter
-    "dsmr": "DSMR",             # Dutch Smart Meter Requirements (P1)
-    "ams_reader": "AMS Reader", # Generic AMS/HAN reader
+    "homewizard": "HomeWizard",  # Popular P1 meter
+    "dsmr": "DSMR",  # Dutch Smart Meter Requirements (P1)
+    "ams_reader": "AMS Reader",  # Generic AMS/HAN reader
     # International smart plugs with power monitoring
     "shelly": "Shelly",
     "tasmota": "Tasmota",
     "tuya": "Tuya",
     "sonoff": "Sonoff",
-    "athom": "Athom",           # Smart plugs with power monitoring
-    "nous": "NOUS",             # Smart plugs with power monitoring
+    "athom": "Athom",  # Smart plugs with power monitoring
+    "nous": "NOUS",  # Smart plugs with power monitoring
     # Energy monitoring systems
     "iotawatt": "IoTaWatt",
     "emporia_vue": "Emporia Vue",
@@ -199,39 +207,80 @@ KNOWN_POWER_METER_INTEGRATIONS = {
 
 WATER_HEATER_SIGNALS = {
     # High confidence (unique to water heaters)
-    "tank_temperature", "water_temperature", "hot_water", "legionella",
-    "away_mode_temperature", "boost_mode", "heating_state",
+    "tank_temperature",
+    "water_temperature",
+    "hot_water",
+    "legionella",
+    "away_mode_temperature",
+    "boost_mode",
+    "heating_state",
     # Medium confidence
-    "varmtvann", "bereder", "boiler", "water_heater",
+    "varmtvann",
+    "bereder",
+    "boiler",
+    "water_heater",
 }
 
 AMS_POWER_METER_SIGNALS = {
     # AMSHAN OBIS fields (high confidence)
-    "active_power_import", "active_power_import_l1", "active_power_import_l2", "active_power_import_l3",
+    "active_power_import",
+    "active_power_import_l1",
+    "active_power_import_l2",
+    "active_power_import_l3",
     "active_power_export",  # Will always be 0 for our simulation (no PV)
-    "reactive_power_import", "reactive_power_export",
-    "voltage_l1", "voltage_l2", "voltage_l3",
-    "current_l1", "current_l2", "current_l3",
-    "power_factor", "power_factor_l1", "power_factor_l2", "power_factor_l3",
+    "reactive_power_import",
+    "reactive_power_export",
+    "voltage_l1",
+    "voltage_l2",
+    "voltage_l3",
+    "current_l1",
+    "current_l2",
+    "current_l3",
+    "power_factor",
+    "power_factor_l1",
+    "power_factor_l2",
+    "power_factor_l3",
     "active_power_import_total",  # Cumulative Wh counter
-    "meter_id", "meter_manufacturer",
+    "meter_id",
+    "meter_manufacturer",
     "obis",  # OBIS code reference
     # Norwegian keywords (medium confidence)
-    "ams", "han", "strømmåler", "power_consumption",
+    "ams",
+    "han",
+    "strømmåler",
+    "power_consumption",
 }
 
 EV_CHARGER_SIGNALS = {
     # Easee/Zaptec entities (high confidence)
-    "status", "session_energy", "total_energy", "power",
-    "cable_connected", "cable_locked", "ev_connected",
-    "available_current_l1", "available_current_l2", "available_current_l3",
-    "actual_current_l1", "actual_current_l2", "actual_current_l3",
-    "charge_mode", "pilot_level", "operating_mode",
-    "max_charging_current", "dynamic_charger_limit",
+    "status",
+    "session_energy",
+    "total_energy",
+    "power",
+    "cable_connected",
+    "cable_locked",
+    "ev_connected",
+    "available_current_l1",
+    "available_current_l2",
+    "available_current_l3",
+    "actual_current_l1",
+    "actual_current_l2",
+    "actual_current_l3",
+    "charge_mode",
+    "pilot_level",
+    "operating_mode",
+    "max_charging_current",
+    "dynamic_charger_limit",
     # Generic EV charger signals (medium confidence)
-    "charging_power", "charging_current", "charging_status", "charger_status",
+    "charging_power",
+    "charging_current",
+    "charging_status",
+    "charger_status",
     # Norwegian keywords
-    "charger", "lader", "elbil", "ev_",
+    "charger",
+    "lader",
+    "elbil",
+    "ev_",
 }
 
 # =============================================================================
@@ -242,31 +291,61 @@ EV_CHARGER_SIGNALS = {
 # Keywords for EV charger detection (Norwegian and English)
 EV_CHARGER_KEYWORDS = {
     # English
-    "charger", "ev", "ev_charger", "electric vehicle",
+    "charger",
+    "ev",
+    "ev_charger",
+    "electric vehicle",
     # Brand names
-    "easee", "zaptec", "wallbox", "garo", "ctek", "charge_amps",
+    "easee",
+    "zaptec",
+    "wallbox",
+    "garo",
+    "ctek",
+    "charge_amps",
     # Norwegian
-    "lader", "elbillader", "elbil", "ladestasjon",
+    "lader",
+    "elbillader",
+    "elbil",
+    "ladestasjon",
 }
 
 # Keywords for AMS/power meter detection (Norwegian and English)
 AMS_KEYWORDS = {
     # Technical terms
-    "ams", "han", "meter", "power_meter", "energy_meter",
+    "ams",
+    "han",
+    "meter",
+    "power_meter",
+    "energy_meter",
     # Norwegian
-    "strømmåler", "strøm", "effekt", "forbruk",
+    "strømmåler",
+    "strøm",
+    "effekt",
+    "forbruk",
     # Brand/protocol
-    "tibber", "p1", "obis", "dsmr",
+    "tibber",
+    "p1",
+    "obis",
+    "dsmr",
 }
 
 # Keywords for water heater detection (Norwegian and English)
 WATER_HEATER_KEYWORDS = {
     # English
-    "water heater", "water_heater", "boiler", "hot water", "hot_water",
+    "water heater",
+    "water_heater",
+    "boiler",
+    "hot water",
+    "hot_water",
     # Norwegian
-    "varmtvannsbereder", "bereder", "varmtvann", "varmt vann",
+    "varmtvannsbereder",
+    "bereder",
+    "varmtvann",
+    "varmt vann",
     # Brand names
-    "hoiax", "høiax", "oso",
+    "hoiax",
+    "høiax",
+    "oso",
 }
 
 
@@ -383,9 +462,7 @@ class AmperaDeviceDiscovery:
 
         return None
 
-    def _detect_device_type_from_signals(
-        self, entities: list[State]
-    ) -> AmperaDeviceType | None:
+    def _detect_device_type_from_signals(self, entities: list[State]) -> AmperaDeviceType | None:
         """Detect device type from semantic entity name signals.
 
         Checks entity names and friendly names for patterns that indicate
@@ -589,6 +666,16 @@ class AmperaDeviceDiscovery:
             if domain not in SUPPORTED_DOMAINS:
                 continue
 
+            # Skip entities from excluded integrations (e.g., ampaera_sim)
+            platform = self._get_entity_platform(entity_id)
+            if platform and platform.lower() in EXCLUDED_INTEGRATIONS:
+                _LOGGER.debug(
+                    "Skipping entity from excluded integration: %s (platform: %s)",
+                    entity_id,
+                    platform,
+                )
+                continue
+
             device_id = self._get_parent_device_id(entity_id)
             if device_id:
                 device_entities.setdefault(device_id, []).append(state)
@@ -654,11 +741,24 @@ class AmperaDeviceDiscovery:
         # These keywords indicate the switch is a control for another device type
         control_keywords = {
             # EV charger controls
-            "ev", "charger", "lader", "elbil", "charging",
+            "ev",
+            "charger",
+            "lader",
+            "elbil",
+            "charging",
             # Water heater controls
-            "water", "heater", "varmtvann", "bereder", "boiler",
+            "water",
+            "heater",
+            "varmtvann",
+            "bereder",
+            "boiler",
             # Generic device controls (these shouldn't be separate devices)
-            "smart", "power", "enable", "disable", "boost", "eco",
+            "smart",
+            "power",
+            "enable",
+            "disable",
+            "boost",
+            "eco",
         }
 
         for state in switch_entities:
@@ -720,9 +820,12 @@ class AmperaDeviceDiscovery:
                     friendly_name = state.attributes.get("friendly_name", "").lower()
                     entity_id_lower = state.entity_id.lower()
                     # Prefer "consumption" or "total" entities as they represent total power
-                    if "consumption" in friendly_name or "consumption" in entity_id_lower:
-                        best_consumption_entity = state.entity_id
-                    elif "total" in friendly_name or "total" in entity_id_lower:
+                    if (
+                        "consumption" in friendly_name
+                        or "consumption" in entity_id_lower
+                        or "total" in friendly_name
+                        or "total" in entity_id_lower
+                    ):
                         best_consumption_entity = state.entity_id
                     elif not best_power_entity:
                         best_power_entity = state.entity_id
@@ -754,9 +857,7 @@ class AmperaDeviceDiscovery:
             model=model,
         )
 
-    def _detect_orphan_device_type(
-        self, state: State, device_class: str | None
-    ) -> str:
+    def _detect_orphan_device_type(self, state: State, device_class: str | None) -> str:
         """Detect device type for an orphan entity using smart detection.
 
         Uses the same hierarchical detection as parent devices:
@@ -946,9 +1047,12 @@ class AmperaDeviceDiscovery:
                 friendly_name = state.attributes.get("friendly_name", "").lower()
                 entity_id_lower = state.entity_id.lower()
                 # Prefer "consumption" or "total" entities as they represent total power
-                if "consumption" in friendly_name or "consumption" in entity_id_lower:
-                    best_consumption_entity = state.entity_id
-                elif "total" in friendly_name or "total" in entity_id_lower:
+                if (
+                    "consumption" in friendly_name
+                    or "consumption" in entity_id_lower
+                    or "total" in friendly_name
+                    or "total" in entity_id_lower
+                ):
                     best_consumption_entity = state.entity_id
                 elif not best_power_entity:
                     best_power_entity = state.entity_id
@@ -973,11 +1077,8 @@ class AmperaDeviceDiscovery:
                 friendly_name = state.attributes.get("friendly_name", "")
                 if friendly_name:
                     # Use first entity's name as base
-                    name = friendly_name.replace("Power", "").replace("Energy", "").strip()
-                    if not name:
-                        name = "Power Meter"
-                    else:
-                        name = f"{name} Power Meter"
+                    base_name = friendly_name.replace("Power", "").replace("Energy", "").strip()
+                    name = "Power Meter" if not base_name else f"{base_name} Power Meter"
                     break
         elif group_id == "virtual_water_heater":
             device_type = AmperaDeviceType.WATER_HEATER

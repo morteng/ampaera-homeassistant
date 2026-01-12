@@ -1,0 +1,67 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Ampæra Simulation",
+        "description": "Select which devices to simulate. These devices will appear in your device registry with proper metadata.",
+        "data": {
+          "devices": "Devices to simulate"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Ampæra Simulation",
+        "description": "Change which devices are simulated.",
+        "data": {
+          "devices": "Devices to simulate"
+        }
+      }
+    },
+    "error": {
+      "no_devices_selected": "Please select at least one device to simulate."
+    }
+  },
+  "services": {
+    "simulate_shower": {
+      "name": "Simulate Shower",
+      "description": "Simulate hot water usage from a shower, dropping water heater temperature.",
+      "fields": {
+        "liters": {
+          "name": "Liters",
+          "description": "Amount of hot water used in liters."
+        }
+      }
+    },
+    "connect_ev": {
+      "name": "Connect EV",
+      "description": "Simulate plugging in an EV to the charger.",
+      "fields": {
+        "battery_soc": {
+          "name": "Battery SOC",
+          "description": "Initial battery state of charge (%)."
+        }
+      }
+    },
+    "disconnect_ev": {
+      "name": "Disconnect EV",
+      "description": "Simulate unplugging an EV from the charger."
+    },
+    "start_charging": {
+      "name": "Start Charging",
+      "description": "Start EV charging (if connected)."
+    },
+    "stop_charging": {
+      "name": "Stop Charging",
+      "description": "Stop EV charging."
+    },
+    "set_current_limit": {
+      "name": "Set Current Limit",
+      "description": "Set the EV charger current limit.",
+      "fields": {
+        "current": {
+          "name": "Current",
+          "description": "Maximum charging current in amps."
+        }
+      }
+    }
+  }
+}

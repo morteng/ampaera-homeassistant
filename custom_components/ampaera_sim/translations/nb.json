@@ -1,0 +1,67 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Ampæra Simulering",
+        "description": "Velg hvilke enheter som skal simuleres. Disse enhetene vil vises i enhetsregisteret med riktig metadata.",
+        "data": {
+          "devices": "Enheter å simulere"
+        }
+      },
+      "reconfigure": {
+        "title": "Rekonfigurer Ampæra Simulering",
+        "description": "Endre hvilke enheter som simuleres.",
+        "data": {
+          "devices": "Enheter å simulere"
+        }
+      }
+    },
+    "error": {
+      "no_devices_selected": "Velg minst én enhet å simulere."
+    }
+  },
+  "services": {
+    "simulate_shower": {
+      "name": "Simuler Dusj",
+      "description": "Simuler varmtvannsbruk fra en dusj, som senker varmtvannsbeholderens temperatur.",
+      "fields": {
+        "liters": {
+          "name": "Liter",
+          "description": "Mengde varmtvann brukt i liter."
+        }
+      }
+    },
+    "connect_ev": {
+      "name": "Koble til EV",
+      "description": "Simuler tilkobling av elbil til laderen.",
+      "fields": {
+        "battery_soc": {
+          "name": "Batteri SOC",
+          "description": "Opprinnelig batterinivå (%)."
+        }
+      }
+    },
+    "disconnect_ev": {
+      "name": "Koble fra EV",
+      "description": "Simuler frakobling av elbil fra laderen."
+    },
+    "start_charging": {
+      "name": "Start Lading",
+      "description": "Start elbillading (hvis tilkoblet)."
+    },
+    "stop_charging": {
+      "name": "Stopp Lading",
+      "description": "Stopp elbillading."
+    },
+    "set_current_limit": {
+      "name": "Sett Strømgrense",
+      "description": "Sett elbilladerens strømgrense.",
+      "fields": {
+        "current": {
+          "name": "Strøm",
+          "description": "Maksimal ladestrøm i ampere."
+        }
+      }
+    }
+  }
+}

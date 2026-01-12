@@ -54,18 +54,14 @@ DISCONNECT_EV_SCHEMA = vol.Schema(
 SIMULATE_SHOWER_SCHEMA = vol.Schema(
     {
         vol.Optional("device_id"): cv.string,
-        vol.Optional("liters", default=50): vol.All(
-            vol.Coerce(int), vol.Range(min=10, max=200)
-        ),
+        vol.Optional("liters", default=50): vol.All(vol.Coerce(int), vol.Range(min=10, max=200)),
     }
 )
 
 SET_EV_CHARGE_LIMIT_SCHEMA = vol.Schema(
     {
         vol.Optional("device_id"): cv.string,
-        vol.Required("current_limit"): vol.All(
-            vol.Coerce(int), vol.Range(min=6, max=32)
-        ),
+        vol.Required("current_limit"): vol.All(vol.Coerce(int), vol.Range(min=6, max=32)),
     }
 )
 
@@ -134,6 +130,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         Drops water heater temperature based on liters used.
         Typical shower uses 40-60L of hot water.
+        Also reports the shower event to the Ampæra backend.
         """
         liters = call.data.get("liters", 50)
         _LOGGER.info("Simulating shower usage: %d liters", liters)
@@ -162,6 +159,39 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             current_temp,
             new_temp,
         )
+
+        # Report shower event to Ampæra backend
+        # Find the event service and water heater device ID from hass.data
+        for entry_data in hass.data.get(DOMAIN, {}).values():
+            if isinstance(entry_data, dict):
+                event_service = entry_data.get("event_service")
+                device_sync_service = entry_data.get("device_sync_service")
+
+                if event_service and device_sync_service:
+                    # Find water heater device ID from entity mappings
+                    water_heater_device_id = None
+                    for entity_id, mapping in device_sync_service.entity_mappings.items():
+                        # Look for water heater entities
+                        if "water_heater" in entity_id.lower():
+                            water_heater_device_id = mapping.device_id
+                            break
+
+                    if water_heater_device_id:
+                        try:
+                            await event_service.report_shower_event(
+                                device_id=water_heater_device_id,
+                                liters=liters,
+                                temp_drop=temp_drop,
+                            )
+                            _LOGGER.debug(
+                                "Reported shower event for device %s",
+                                water_heater_device_id,
+                            )
+                        except Exception as err:
+                            _LOGGER.warning("Failed to report shower event: %s", err)
+                    else:
+                        _LOGGER.debug("No water heater device found for shower event reporting")
+                    break  # Only report once
 
     async def handle_set_ev_charge_limit(call: ServiceCall) -> None:
         """Handle set_ev_charge_limit service call.

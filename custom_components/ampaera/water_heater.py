@@ -62,7 +62,7 @@ async def async_setup_entry(
 
     entities: list[AmperaWaterHeater] = []
 
-    for site_id, coordinator in coordinators.items():
+    for _site_id, coordinator in coordinators.items():
         # Find water heater devices
         for device in coordinator.devices_data:
             device_type = device.get("device_type", device.get("type"))
@@ -211,13 +211,13 @@ class AmperaWaterHeater(CoordinatorEntity[AmperaDataCoordinator], WaterHeaterEnt
 
         await self.coordinator.async_request_refresh()
 
-    async def async_turn_on(self, **kwargs: Any) -> None:
+    async def async_turn_on(self, **_kwargs: Any) -> None:
         """Turn the water heater on."""
         _LOGGER.debug("Turning on water heater %s", self._device_id)
         await self._api.async_turn_on_device(self._device_id)
         await self.coordinator.async_request_refresh()
 
-    async def async_turn_off(self, **kwargs: Any) -> None:
+    async def async_turn_off(self, **_kwargs: Any) -> None:
         """Turn the water heater off."""
         _LOGGER.debug("Turning off water heater %s", self._device_id)
         await self._api.async_turn_off_device(self._device_id)

@@ -112,9 +112,7 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
         self._simulation_profile: str = "family"
         self._simulation_wh_type: str = "smart"
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the initial step - API key entry."""
         errors: dict[str, str] = {}
 
@@ -170,9 +168,7 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
             description_placeholders={"default_url": DEFAULT_API_BASE_URL},
         )
 
-    async def async_step_mode(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_mode(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle installation mode selection.
 
         Users must choose between:
@@ -183,16 +179,13 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
         and real devices in the same installation.
         """
         if user_input is not None:
-            self._installation_mode = user_input.get(
-                CONF_INSTALLATION_MODE, INSTALLATION_MODE_REAL
-            )
+            self._installation_mode = user_input.get(CONF_INSTALLATION_MODE, INSTALLATION_MODE_REAL)
             # Move to location configuration
             return await self.async_step_location()
 
         # Build mode options
         mode_options = [
-            SelectOptionDict(value=code, label=name)
-            for code, name in INSTALLATION_MODES
+            SelectOptionDict(value=code, label=name) for code, name in INSTALLATION_MODES
         ]
 
         return self.async_show_form(
@@ -233,10 +226,7 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
         ha_location = self.hass.config.location_name or "Home"
 
         # Build grid region options
-        region_options = [
-            SelectOptionDict(value=code, label=name)
-            for code, name in GRID_REGIONS
-        ]
+        region_options = [SelectOptionDict(value=code, label=name) for code, name in GRID_REGIONS]
 
         return self.async_show_form(
             step_id="location",
@@ -302,9 +292,7 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="devices",
             data_schema=vol.Schema(
                 {
-                    vol.Required(
-                        CONF_SELECTED_ENTITIES, default=default_selection
-                    ): SelectSelector(
+                    vol.Required(CONF_SELECTED_ENTITIES, default=default_selection): SelectSelector(
                         SelectSelectorConfig(
                             options=device_options,
                             multiple=True,
@@ -314,9 +302,7 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
                 }
             ),
             errors=errors,
-            description_placeholders={
-                "device_count": str(len(self._discovered_devices))
-            },
+            description_placeholders={"device_count": str(len(self._discovered_devices))},
         )
 
     async def async_step_simulation(
@@ -333,12 +319,8 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             # In simulation mode, simulation is always enabled
             self._enable_simulation = True
-            self._simulation_profile = user_input.get(
-                CONF_SIMULATION_HOUSEHOLD_PROFILE, "family"
-            )
-            self._simulation_wh_type = user_input.get(
-                CONF_SIMULATION_WATER_HEATER_TYPE, "smart"
-            )
+            self._simulation_profile = user_input.get(CONF_SIMULATION_HOUSEHOLD_PROFILE, "family")
+            self._simulation_wh_type = user_input.get(CONF_SIMULATION_WATER_HEATER_TYPE, "smart")
 
             # No devices selected in simulation mode - simulation creates them
             self._selected_entities = []
@@ -348,14 +330,12 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
 
         # Build profile options
         profile_options = [
-            SelectOptionDict(value=code, label=name)
-            for code, name in SIMULATION_PROFILES
+            SelectOptionDict(value=code, label=name) for code, name in SIMULATION_PROFILES
         ]
 
         # Build water heater type options
         wh_type_options = [
-            SelectOptionDict(value=code, label=name)
-            for code, name in SIMULATION_WH_TYPES
+            SelectOptionDict(value=code, label=name) for code, name in SIMULATION_WH_TYPES
         ]
 
         # In simulation mode, show configuration without enable checkbox
@@ -410,9 +390,7 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
             # In simulation mode, no devices are selected - simulation creates them
             if self._selected_entities:
                 discovery = AmperaDeviceDiscovery(self.hass)
-                devices_to_register = discovery.get_devices_by_ids(
-                    self._selected_entities
-                )
+                devices_to_register = discovery.get_devices_by_ids(self._selected_entities)
                 device_data = [d.to_dict() for d in devices_to_register]
             else:
                 device_data = []
@@ -428,9 +406,7 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
                 devices=device_data,
             )
             self._device_mappings = devices_response["device_mappings"]
-            _LOGGER.info(
-                "Registered %d devices", devices_response["registered"]
-            )
+            _LOGGER.info("Registered %d devices", devices_response["registered"])
 
             # Check if already configured (by HA instance ID)
             await self.async_set_unique_id(self._ha_instance_id)
@@ -438,7 +414,9 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
 
             # Create the config entry
             # Include installation mode badge in title for clarity
-            title_suffix = " (Simulation)" if self._installation_mode == INSTALLATION_MODE_SIMULATION else ""
+            title_suffix = (
+                " (Simulation)" if self._installation_mode == INSTALLATION_MODE_SIMULATION else ""
+            )
             return self.async_create_entry(
                 title=f"{self._site_name}{title_suffix}",
                 data={
@@ -557,9 +535,7 @@ class AmperaOptionsFlow(OptionsFlow):
         """Return the config entry for this flow."""
         return self._config_entry
 
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the initial step of options flow."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
@@ -569,18 +545,14 @@ class AmperaOptionsFlow(OptionsFlow):
         entry_data = self.config_entry.data
 
         # Check installation mode
-        installation_mode = entry_data.get(
-            CONF_INSTALLATION_MODE, INSTALLATION_MODE_REAL
-        )
+        installation_mode = entry_data.get(CONF_INSTALLATION_MODE, INSTALLATION_MODE_REAL)
         is_simulation_mode = installation_mode == INSTALLATION_MODE_SIMULATION
 
         # Build common schema fields (available in both modes)
         schema_fields: dict[vol.Marker, Any] = {
             vol.Optional(
                 CONF_POLLING_INTERVAL,
-                default=current_options.get(
-                    CONF_POLLING_INTERVAL, DEFAULT_POLLING_INTERVAL
-                ),
+                default=current_options.get(CONF_POLLING_INTERVAL, DEFAULT_POLLING_INTERVAL),
             ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
             vol.Optional(
                 CONF_COMMAND_POLL_INTERVAL,
@@ -604,33 +576,35 @@ class AmperaOptionsFlow(OptionsFlow):
         if is_simulation_mode:
             # Simulation mode: show simulation options (always enabled)
             profile_options = [
-                SelectOptionDict(value=code, label=name)
-                for code, name in SIMULATION_PROFILES
+                SelectOptionDict(value=code, label=name) for code, name in SIMULATION_PROFILES
             ]
             wh_type_options = [
-                SelectOptionDict(value=code, label=name)
-                for code, name in SIMULATION_WH_TYPES
+                SelectOptionDict(value=code, label=name) for code, name in SIMULATION_WH_TYPES
             ]
 
-            schema_fields[vol.Optional(
-                CONF_SIMULATION_HOUSEHOLD_PROFILE,
-                default=current_options.get(
+            schema_fields[
+                vol.Optional(
                     CONF_SIMULATION_HOUSEHOLD_PROFILE,
-                    entry_data.get(CONF_SIMULATION_HOUSEHOLD_PROFILE, "family"),
-                ),
-            )] = SelectSelector(
+                    default=current_options.get(
+                        CONF_SIMULATION_HOUSEHOLD_PROFILE,
+                        entry_data.get(CONF_SIMULATION_HOUSEHOLD_PROFILE, "family"),
+                    ),
+                )
+            ] = SelectSelector(
                 SelectSelectorConfig(
                     options=profile_options,
                     mode=SelectSelectorMode.DROPDOWN,
                 )
             )
-            schema_fields[vol.Optional(
-                CONF_SIMULATION_WATER_HEATER_TYPE,
-                default=current_options.get(
+            schema_fields[
+                vol.Optional(
                     CONF_SIMULATION_WATER_HEATER_TYPE,
-                    entry_data.get(CONF_SIMULATION_WATER_HEATER_TYPE, "smart"),
-                ),
-            )] = SelectSelector(
+                    default=current_options.get(
+                        CONF_SIMULATION_WATER_HEATER_TYPE,
+                        entry_data.get(CONF_SIMULATION_WATER_HEATER_TYPE, "smart"),
+                    ),
+                )
+            ] = SelectSelector(
                 SelectSelectorConfig(
                     options=wh_type_options,
                     mode=SelectSelectorMode.DROPDOWN,
@@ -638,10 +612,12 @@ class AmperaOptionsFlow(OptionsFlow):
             )
         else:
             # Real device mode: show voltage sensor option
-            schema_fields[vol.Optional(
-                CONF_ENABLE_VOLTAGE_SENSORS,
-                default=current_options.get(CONF_ENABLE_VOLTAGE_SENSORS, False),
-            )] = bool
+            schema_fields[
+                vol.Optional(
+                    CONF_ENABLE_VOLTAGE_SENSORS,
+                    default=current_options.get(CONF_ENABLE_VOLTAGE_SENSORS, False),
+                )
+            ] = bool
 
         return self.async_show_form(
             step_id="init",

@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant, State
 
     from .api import AmperaApiClient
+    from .event_service import AmperaEventService
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -77,6 +78,7 @@ class AmperaTelemetryPushService:
         entity_mappings: dict[str, EntityMapping],
         debounce_seconds: float = DEFAULT_DEBOUNCE_SECONDS,
         heartbeat_seconds: float = DEFAULT_HEARTBEAT_SECONDS,
+        event_service: AmperaEventService | None = None,
     ) -> None:
         """Initialize the push service.
 
@@ -87,6 +89,7 @@ class AmperaTelemetryPushService:
             entity_mappings: Mapping of HA entity_id → EntityMapping
             debounce_seconds: Seconds to wait before pushing batched changes
             heartbeat_seconds: Seconds between periodic heartbeat pushes
+            event_service: Optional event service for state change reporting
         """
         self._hass = hass
         self._api = api_client
@@ -94,6 +97,7 @@ class AmperaTelemetryPushService:
         self._entity_mappings = entity_mappings
         self._debounce_seconds = debounce_seconds
         self._heartbeat_seconds = heartbeat_seconds
+        self._event_service = event_service
 
         # Pending readings to push (keyed by device_id to dedupe)
         # Each device accumulates readings from multiple entities
@@ -111,6 +115,26 @@ class AmperaTelemetryPushService:
 
         # Service state
         self._running = False
+
+        # Track previous on/off states for state change detection
+        self._previous_is_on: dict[str, bool | None] = {}
+
+        # Build device → on_off entity mapping for including is_on in sensor readings
+        self._device_on_off_entities: dict[str, str] = self._build_device_on_off_map()
+
+    def _build_device_on_off_map(self) -> dict[str, str]:
+        """Build mapping of device_id → on_off entity_id.
+
+        This enables sensor readings to include is_on state from the
+        associated switch/control entity, which is essential for devices
+        where sensors and switches are separate HA entities (e.g., template
+        sensors + template switches in simulation).
+        """
+        device_on_off: dict[str, str] = {}
+        for entity_id, mapping in self._entity_mappings.items():
+            if mapping.capability == "on_off":
+                device_on_off[mapping.device_id] = entity_id
+        return device_on_off
 
     @property
     def is_running(self) -> bool:
@@ -194,7 +218,10 @@ class AmperaTelemetryPushService:
         await self._push_initial_states()
 
         # Start heartbeat for periodic pushes (ensures data flows even without changes)
-        self._heartbeat_task = self._hass.async_create_task(self._run_heartbeat())
+        # Use background task so it doesn't block HA startup completion
+        self._heartbeat_task = self._hass.async_create_background_task(
+            self._run_heartbeat(), "ampaera_telemetry_heartbeat"
+        )
 
     async def async_stop(self) -> None:
         """Stop the push service."""
@@ -295,6 +322,40 @@ class AmperaTelemetryPushService:
         if not reading:
             return
 
+        # Detect on/off state changes for event reporting
+        if self._event_service and "is_on" in reading:
+            new_is_on = reading["is_on"]
+            device_id = mapping.device_id
+
+            # Get previous state from our tracking
+            old_is_on = self._previous_is_on.get(device_id)
+
+            # Update our tracking
+            self._previous_is_on[device_id] = new_is_on
+
+            # Report state change if it actually changed
+            if old_is_on is not None and old_is_on != new_is_on:
+                # Extract power if available
+                power_w = reading.get("power_w")
+
+                # Classify the source from HA event context
+                ha_source = self._event_service.classify_source(event.context)
+
+                # Get user_id if present
+                user_id = event.context.user_id if event.context else None
+
+                # Report the state change event asynchronously
+                self._hass.async_create_task(
+                    self._event_service.report_state_change(
+                        device_id=device_id,
+                        old_state=old_is_on,
+                        new_state=new_is_on,
+                        ha_source=ha_source,
+                        power_w=power_w,
+                        user_id=user_id,
+                    )
+                )
+
         # Add to pending (async)
         self._hass.async_create_task(self._add_pending_reading(mapping.device_id, reading))
 
@@ -328,7 +389,9 @@ class AmperaTelemetryPushService:
             # Already scheduled
             return
 
-        self._debounce_task = self._hass.async_create_task(self._debounced_push())
+        self._debounce_task = self._hass.async_create_background_task(
+            self._debounced_push(), "ampaera_telemetry_debounce"
+        )
 
     async def _debounced_push(self) -> None:
         """Wait for debounce period then push."""
@@ -405,7 +468,7 @@ class AmperaTelemetryPushService:
 
         # Handle based on domain - capability determines the field to update
         if domain == "sensor":
-            reading = self._format_sensor_reading(reading, state, mapping.capability)
+            reading = self._format_sensor_reading(reading, state, mapping)
         elif domain == "water_heater":
             reading = self._format_water_heater_reading(reading, state)
         elif domain == "switch":
@@ -422,19 +485,33 @@ class AmperaTelemetryPushService:
         self,
         reading: dict[str, Any],
         state: State,
-        capability: str,
+        mapping: EntityMapping,
     ) -> dict[str, Any]:
         """Format sensor state into reading.
 
         Uses the capability to determine which field to populate,
         supporting phase-specific readings (voltage_l1, l2, l3, etc.).
+
+        Also includes is_on state from associated on_off entity if available,
+        which is essential for devices where sensors and switches are separate
+        HA entities (e.g., template sensors + template switches in simulation).
         """
+        capability = mapping.capability
+
         try:
             value = float(state.state)
         except (ValueError, TypeError):
             return reading
 
         unit = state.attributes.get(ATTR_UNIT_OF_MEASUREMENT, "")
+
+        # Include is_on from associated switch entity if available
+        # This enables state change detection for sensor-based readings
+        on_off_entity_id = self._device_on_off_entities.get(mapping.device_id)
+        if on_off_entity_id:
+            on_off_state = self._hass.states.get(on_off_entity_id)
+            if on_off_state and on_off_state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                reading["is_on"] = on_off_state.state == STATE_ON
 
         # Map capability to the correct reading field
         if capability == "power":
@@ -573,6 +650,9 @@ class AmperaTelemetryPushService:
         new_entities = set(entity_mappings.keys())
 
         self._entity_mappings = entity_mappings
+
+        # Rebuild device → on_off entity map
+        self._device_on_off_entities = self._build_device_on_off_map()
 
         # If tracked entities changed, restart subscription
         if old_entities != new_entities and self._running:

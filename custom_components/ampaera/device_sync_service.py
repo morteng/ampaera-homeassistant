@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from homeassistant.core import Event, callback
 from homeassistant.helpers.event import async_track_time_interval
@@ -105,6 +105,10 @@ class AmperaDeviceSyncService:
             return
 
         self._running = True
+
+        # Delay initial sync to allow other integrations to finish loading entities
+        # This prevents race condition where ampaera starts before ampaera_sim entities exist
+        await asyncio.sleep(10)
 
         # Perform initial sync
         await self._sync_devices()

@@ -44,6 +44,7 @@ from .const import (
     DOMAIN,
 )
 from .device_sync_service import AmperaDeviceSyncService
+from .event_service import AmperaEventService
 from .push_service import AmperaTelemetryPushService, EntityMapping
 from .services import async_setup_services as async_setup_simulation_services
 from .services import async_unload_services as async_unload_simulation_services
@@ -130,13 +131,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         len(entity_mappings),
     )
 
+    # Create event service for reporting state changes with source attribution
+    event_service = AmperaEventService(
+        hass=hass,
+        api_client=api,
+        site_id=site_id,
+    )
+
     # Create telemetry push service with entity mappings from device sync
+    # Pass event_service for on/off state change reporting
     push_service = AmperaTelemetryPushService(
         hass=hass,
         api_client=api,
         site_id=site_id,
         entity_mappings=entity_mappings,
         debounce_seconds=float(push_interval),
+        event_service=event_service,
     )
 
     # Create command polling service (uses device_id_mappings for command routing)
@@ -152,7 +162,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # This transforms entity_mappings (entity_id → EntityMapping) into a format
     # the command service can use to resolve the correct entity for each command type
     def build_capability_mappings(
-        ent_mappings: dict[str, "EntityMapping"],
+        ent_mappings: dict[str, EntityMapping],
     ) -> dict[str, dict[str, str]]:
         """Transform entity mappings to capability mappings."""
         cap_mappings: dict[str, dict[str, str]] = {}
@@ -166,17 +176,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     capability_mappings = build_capability_mappings(entity_mappings)
     command_service.set_entity_mappings(capability_mappings)
 
-    # Register callback to update command service when device sync updates mappings
+    # Register callback to update services when device sync updates mappings
     def on_sync_complete(
         _device_mappings: dict[str, str],
-        new_entity_mappings: dict[str, "EntityMapping"],
+        new_entity_mappings: dict[str, EntityMapping],
     ) -> None:
-        """Update command service entity mappings after device sync."""
+        """Update push and command services after device sync."""
+        # Update push service with new entity mappings
+        push_service.update_entity_mappings(new_entity_mappings)
+
+        # Update command service with capability mappings
         new_cap_mappings = build_capability_mappings(new_entity_mappings)
         command_service.set_entity_mappings(new_cap_mappings)
         _LOGGER.debug(
-            "Updated command service with %d capability mappings",
-            len(new_cap_mappings),
+            "Updated entity mappings for %d devices",
+            len(new_entity_mappings),
         )
 
     device_sync_service.register_sync_callback(on_sync_complete)
@@ -196,6 +210,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "push_service": push_service,
         "command_service": command_service,
         "device_sync_service": device_sync_service,
+        "event_service": event_service,
         "site_id": site_id,
         "site_name": site_name,
     }

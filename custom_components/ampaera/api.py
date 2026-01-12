@@ -76,9 +76,7 @@ class AmperaApiClient:
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create the aiohttp session."""
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=30)
-            )
+            self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30))
             self._owns_session = True
         return self._session
 
@@ -124,9 +122,7 @@ class AmperaApiClient:
                     json=data,
                     params=params,
                 ) as response:
-                    _LOGGER.debug(
-                        "API %s %s -> %s", method, path, response.status
-                    )
+                    _LOGGER.debug("API %s %s -> %s", method, path, response.status)
 
                     if response.status == 401:
                         raise AmperaAuthError("Invalid or expired API token")
@@ -139,15 +135,11 @@ class AmperaApiClient:
 
                     if response.status >= 500:
                         text = await response.text()
-                        raise AmperaServerError(
-                            f"Server error {response.status}: {text[:200]}"
-                        )
+                        raise AmperaServerError(f"Server error {response.status}: {text[:200]}")
 
                     if response.status >= 400:
                         text = await response.text()
-                        raise AmperaApiError(
-                            f"API error {response.status}: {text[:200]}"
-                        )
+                        raise AmperaApiError(f"API error {response.status}: {text[:200]}")
 
                     # Handle empty responses (204 No Content)
                     if response.status == 204:
@@ -156,13 +148,9 @@ class AmperaApiClient:
                     return await response.json()
 
             except aiohttp.ClientError as err:
-                raise AmperaConnectionError(
-                    f"Connection error: {err}"
-                ) from err
+                raise AmperaConnectionError(f"Connection error: {err}") from err
             except TimeoutError as err:
-                raise AmperaConnectionError(
-                    "Request timed out"
-                ) from err
+                raise AmperaConnectionError("Request timed out") from err
 
     # -------------------------------------------------------------------------
     # Authentication
@@ -224,9 +212,7 @@ class AmperaApiClient:
         Returns:
             Telemetry data with power, voltage, current readings
         """
-        return await self._request(
-            "GET", f"/api/v1/telemetry/sites/{site_id}/current"
-        )
+        return await self._request("GET", f"/api/v1/telemetry/sites/{site_id}/current")
 
     async def async_get_portfolio(self) -> dict[str, Any]:
         """Get aggregated portfolio data for all sites.
@@ -249,9 +235,7 @@ class AmperaApiClient:
         Returns:
             List of device dictionaries
         """
-        response = await self._request(
-            "GET", "/api/v1/devices", params={"site_id": site_id}
-        )
+        response = await self._request("GET", "/api/v1/devices", params={"site_id": site_id})
         if isinstance(response, list):
             return response
         return response.get("devices", response.get("items", []))
@@ -314,9 +298,7 @@ class AmperaApiClient:
         Returns:
             Command status (pending, sent, acknowledged, failed)
         """
-        return await self._request(
-            "GET", f"/api/v1/device-commands/{command_id}"
-        )
+        return await self._request("GET", f"/api/v1/device-commands/{command_id}")
 
     # -------------------------------------------------------------------------
     # Convenience methods for water heater
@@ -330,9 +312,7 @@ class AmperaApiClient:
         """Turn a device off."""
         return await self.async_send_command(device_id, "turn_off")
 
-    async def async_set_temperature(
-        self, device_id: str, temperature: float
-    ) -> dict[str, Any]:
+    async def async_set_temperature(self, device_id: str, temperature: float) -> dict[str, Any]:
         """Set water heater target temperature.
 
         Args:
@@ -522,3 +502,38 @@ class AmperaApiClient:
             "devices": devices,
         }
         return await self._request("POST", "/api/v1/ha/devices/sync", data=data)
+
+    async def async_report_events(
+        self,
+        site_id: str,
+        events: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Report device events with source attribution to Ampæra.
+
+        Events are discrete state changes (power_on, power_off, shower_event)
+        with context about what triggered the change. This supplements the
+        existing telemetry-based state detection with explicit source info.
+
+        Args:
+            site_id: Ampæra site UUID
+            events: List of event dicts with:
+                - device_id: Ampæra device UUID
+                - event_type: Type of event (power_on, power_off, shower_event)
+                - timestamp: ISO 8601 timestamp when event occurred
+                - ha_source: Source type (user_manual, ha_schedule, ha_physics, shower_event)
+                - ha_automation_id: Optional automation ID if triggered by automation
+                - ha_automation_alias: Optional human-readable automation name
+                - ha_user_id: Optional HA user ID if triggered by user action
+                - old_state: Optional previous state (on/off)
+                - new_state: Optional new state (on/off)
+                - power_w: Optional power reading at time of event
+                - metadata: Optional event-specific metadata
+
+        Returns:
+            dict with ingested count and server_timestamp
+        """
+        data = {
+            "site_id": site_id,
+            "events": events,
+        }
+        return await self._request("POST", "/api/v1/ha/events/ingest", data=data)

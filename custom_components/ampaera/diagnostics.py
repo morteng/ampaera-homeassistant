@@ -84,7 +84,7 @@ async def async_get_config_entry_diagnostics(
         },
         "config_entry": {
             "entry_id": config_entry.entry_id,
-            "config_version": config_entry.version,
+            "version": config_entry.version,
             "domain": config_entry.domain,
             "title": config_entry.title,
             "source": config_entry.source,
@@ -169,10 +169,14 @@ async def async_get_config_entry_diagnostics(
 
     # Add Home Assistant info
     diagnostics["home_assistant"] = {
-        "version": hass.config.version,
-        "timezone": str(hass.config.time_zone),
-        "location_name": hass.config.location_name,
-        "unit_system": hass.config.units.name,
+        "version": getattr(hass.config, "version", "unknown"),
+        "timezone": str(getattr(hass.config, "time_zone", "UTC")),
+        "location_name": getattr(hass.config, "location_name", "unknown"),
+        "unit_system": (
+            getattr(hass.config.units, "name", "metric")
+            if hasattr(hass.config, "units")
+            else "metric"
+        ),
     }
 
     return diagnostics
