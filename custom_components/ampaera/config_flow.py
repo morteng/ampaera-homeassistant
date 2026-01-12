@@ -221,9 +221,11 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
 
         # Generate PKCE code verifier and challenge
         self._code_verifier = secrets.token_urlsafe(64)
-        code_challenge = base64.urlsafe_b64encode(
-            hashlib.sha256(self._code_verifier.encode("ascii")).digest()
-        ).rstrip(b"=").decode("ascii")
+        code_challenge = (
+            base64.urlsafe_b64encode(hashlib.sha256(self._code_verifier.encode("ascii")).digest())
+            .rstrip(b"=")
+            .decode("ascii")
+        )
 
         # Generate state for CSRF protection
         self._oauth_state = secrets.token_urlsafe(32)
@@ -231,15 +233,17 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
         # Build OAuth authorization URL
         from urllib.parse import urlencode
 
-        auth_params = urlencode({
-            "client_id": OAUTH_CLIENT_ID,
-            "redirect_uri": self._get_oauth_redirect_uri(),
-            "response_type": "code",
-            "scope": OAUTH_SCOPE,
-            "state": self._oauth_state,
-            "code_challenge": code_challenge,
-            "code_challenge_method": "S256",
-        })
+        auth_params = urlencode(
+            {
+                "client_id": OAUTH_CLIENT_ID,
+                "redirect_uri": self._get_oauth_redirect_uri(),
+                "response_type": "code",
+                "scope": OAUTH_SCOPE,
+                "state": self._oauth_state,
+                "code_challenge": code_challenge,
+                "code_challenge_method": "S256",
+            }
+        )
         auth_url = f"{OAUTH_AUTHORIZE_URL}?{auth_params}"
 
         return self.async_external_step(

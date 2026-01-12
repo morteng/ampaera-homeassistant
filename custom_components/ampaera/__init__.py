@@ -500,8 +500,6 @@ async def async_migrate_entry(
         # Add auth_method field with default to api_key for existing entries
         new_data = {**entry.data, CONF_AUTH_METHOD: AUTH_METHOD_API_KEY}
         hass.config_entries.async_update_entry(entry, data=new_data, version=3)
-        _LOGGER.info(
-            "Migrated config entry to version 3 (added auth_method=api_key)"
-        )
+        _LOGGER.info("Migrated config entry to version 3 (added auth_method=api_key)")
 
     return True
