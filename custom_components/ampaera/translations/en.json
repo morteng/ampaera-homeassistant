@@ -40,9 +40,9 @@
       },
       "devices": {
         "title": "Select Devices",
-        "description": "Choose which Home Assistant devices to sync with Ampæra. Found {device_count} compatible devices. Only real physical devices are shown - no simulated devices.",
+        "description": "Choose which Home Assistant devices to sync with Ampæra. Found {device_count} compatible devices. You can continue without devices and add them later. Only real physical devices are shown.",
         "data": {
-          "selected_entities": "Devices to sync"
+          "selected_entities": "Devices to sync (optional)"
         }
       },
       "simulation": {

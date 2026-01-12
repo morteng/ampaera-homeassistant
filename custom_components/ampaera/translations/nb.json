@@ -40,9 +40,9 @@
       },
       "devices": {
         "title": "Velg enheter",
-        "description": "Velg hvilke Home Assistant-enheter som skal synkroniseres med Ampæra. Fant {device_count} kompatible enheter. Kun ekte fysiske enheter vises - ingen simulerte enheter.",
+        "description": "Velg hvilke Home Assistant-enheter som skal synkroniseres med Ampæra. Fant {device_count} kompatible enheter. Du kan fortsette uten enheter og legge dem til senere. Kun ekte fysiske enheter vises.",
         "data": {
-          "selected_entities": "Enheter å synkronisere"
+          "selected_entities": "Enheter å synkronisere (valgfritt)"
         }
       },
       "simulation": {

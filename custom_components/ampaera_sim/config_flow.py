@@ -71,6 +71,29 @@ class AmperaSimConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_import(
+        self, import_data: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle import from ampaera integration (automatic setup).
+
+        This is called when the ampaera integration has simulation mode enabled
+        and automatically creates the ampaera_sim config entry.
+        """
+        # Check if already configured
+        await self.async_set_unique_id("ampaera_sim_auto")
+        self._abort_if_unique_id_configured()
+
+        # Use provided devices or default to all
+        devices = (import_data or {}).get(
+            CONF_DEVICES,
+            [DEVICE_WATER_HEATER, DEVICE_EV_CHARGER, DEVICE_HOUSEHOLD, DEVICE_AMS_METER],
+        )
+
+        return self.async_create_entry(
+            title="Ampæra Simulation",
+            data={CONF_DEVICES: devices},
+        )
+
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:

@@ -25,6 +25,10 @@ from homeassistant.config_entries import (
     ConfigFlow,
     OptionsFlow,
 )
+from homeassistant.helpers.config_entry_oauth2_flow import (
+    AbstractOAuth2FlowHandler,
+    async_register_implementation,
+)
 
 # ConfigFlowResult was added in HA 2024.5+, use FlowResult for older versions
 try:
@@ -79,13 +83,11 @@ from .const import (
     INSTALLATION_MODE_REAL,
     INSTALLATION_MODE_SIMULATION,
     INSTALLATION_MODES,
-    OAUTH_AUTHORIZE_URL,
     OAUTH_CLIENT_ID,
-    OAUTH_SCOPE,
-    OAUTH_TOKEN_URL,
     SIMULATION_PROFILES,
     SIMULATION_WH_TYPES,
 )
+from .application_credentials import AmperaOAuth2Implementation
 from .device_discovery import AmperaDeviceDiscovery
 
 _LOGGER = logging.getLogger(__name__)
@@ -102,29 +104,18 @@ def _generate_ha_instance_id() -> str:
     return str(uuid.uuid4())[:12]
 
 
-class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Ampæra Energy.
+class AmperaOAuth2FlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
+    """Handle OAuth2 config flow for Ampæra Energy.
 
-    The flow (v2.0 Push Architecture with OAuth):
-    1. user step: Choose authentication method (OAuth or API key)
-    2a. oauth step: OAuth2 flow with Ampæra account
-    2b. api_key step: Enter API key manually
-    3. mode step: Choose real devices or simulation
-    4. location step: Configure site (name, grid region)
-    5. devices step: Select HA devices to sync
-    6. Register site and devices on Ampæra
+    Uses Home Assistant's built-in OAuth2 flow handler which properly
+    manages state, PKCE, and callback routing.
     """
 
-    VERSION = 3  # Bump version for OAuth config structure
+    DOMAIN = DOMAIN
 
     def __init__(self) -> None:
-        """Initialize the config flow."""
-        # Authentication
-        self._auth_method: str = AUTH_METHOD_OAUTH
-        self._api_key: str | None = None
-        self._oauth_token: str | None = None
-        self._oauth_refresh_token: str | None = None
-        self._api_url: str = DEFAULT_API_BASE_URL
+        """Initialize the OAuth2 flow handler."""
+        super().__init__()
         # Site configuration
         self._site_name: str = "Home"
         self._grid_region: str = "NO1"
@@ -133,30 +124,46 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
         self._selected_entities: list[str] = []
         self._site_id: str | None = None
         self._device_mappings: dict[str, str] = {}
+        self._api_url: str = DEFAULT_API_BASE_URL
         # Installation mode - mutually exclusive: "real" or "simulation"
         self._installation_mode: str = INSTALLATION_MODE_REAL
         # Simulation options (only used in simulation mode)
         self._enable_simulation: bool = False
         self._simulation_profile: str = "family"
         self._simulation_wh_type: str = "smart"
-        # OAuth state for PKCE
-        self._oauth_state: str | None = None
-        self._code_verifier: str | None = None
+        # OAuth tokens (set after successful OAuth)
+        self._oauth_token: str | None = None
+        self._oauth_refresh_token: str | None = None
+        # API key (for API key auth method)
+        self._api_key: str | None = None
 
-    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Handle the initial step - authentication method selection.
+    @property
+    def logger(self) -> logging.Logger:
+        """Return logger."""
+        return _LOGGER
 
-        Users can choose between:
-        - OAuth2 (recommended): Click to connect with Ampæra account
-        - API Key (advanced): Enter API key manually
-        """
+    @property
+    def extra_authorize_data(self) -> dict[str, Any]:
+        """Extra data to include in the authorize URL."""
+        return {"scope": "ha:full"}
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle the initial step - choose OAuth or API key."""
         if user_input is not None:
             auth_method = user_input.get(CONF_AUTH_METHOD, AUTH_METHOD_OAUTH)
-            self._auth_method = auth_method
 
             if auth_method == AUTH_METHOD_OAUTH:
-                # Start OAuth2 flow
-                return await self.async_step_oauth()
+                # Register our built-in OAuth implementation
+                # This must be done before pick_implementation for fresh installs
+                async_register_implementation(
+                    self.hass,
+                    DOMAIN,
+                    AmperaOAuth2Implementation(self.hass),
+                )
+                # Start OAuth2 flow using HA's built-in handler
+                return await self.async_step_pick_implementation()
             else:
                 # Go to API key entry
                 return await self.async_step_api_key()
@@ -178,144 +185,20 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
             ),
         )
 
-    async def async_step_oauth(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Handle OAuth2 authentication step.
+    async def async_oauth_create_entry(self, data: dict[str, Any]) -> ConfigFlowResult:
+        """Create entry from successful OAuth.
 
-        This step initiates the OAuth2 flow by redirecting the user to Ampæra's
-        authorization page. After the user logs in and approves, they're redirected
-        back to Home Assistant with an authorization code.
+        This is called by AbstractOAuth2FlowHandler after successful OAuth.
+        We continue to mode selection.
         """
-        import base64
-        import hashlib
-        import secrets
+        # Store OAuth tokens
+        self._oauth_token = data.get("token", {}).get("access_token")
+        self._oauth_refresh_token = data.get("token", {}).get("refresh_token")
 
-        errors: dict[str, str] = {}
+        _LOGGER.info("OAuth authentication successful, proceeding to mode selection")
 
-        if user_input is not None:
-            # This is called when returning from OAuth
-            # The auth code and state are passed in user_input
-            code = user_input.get("code")
-            state = user_input.get("state")
-
-            if not code:
-                errors["base"] = "oauth_failed"
-            elif state != self._oauth_state:
-                errors["base"] = "oauth_state_mismatch"
-            else:
-                # Exchange code for token
-                try:
-                    token_data = await self._exchange_oauth_code(code)
-                    self._oauth_token = token_data.get("access_token")
-                    self._oauth_refresh_token = token_data.get("refresh_token")
-
-                    if self._oauth_token:
-                        _LOGGER.info("OAuth authentication successful")
-                        # Move to installation mode selection
-                        return await self.async_step_mode()
-                    else:
-                        errors["base"] = "oauth_token_failed"
-
-                except Exception as e:
-                    _LOGGER.exception("OAuth token exchange failed: %s", e)
-                    errors["base"] = "oauth_failed"
-
-        # Generate PKCE code verifier and challenge
-        self._code_verifier = secrets.token_urlsafe(64)
-        code_challenge = (
-            base64.urlsafe_b64encode(hashlib.sha256(self._code_verifier.encode("ascii")).digest())
-            .rstrip(b"=")
-            .decode("ascii")
-        )
-
-        # Generate state for CSRF protection
-        self._oauth_state = secrets.token_urlsafe(32)
-
-        # Build OAuth authorization URL
-        from urllib.parse import urlencode
-
-        auth_params = urlencode(
-            {
-                "client_id": OAUTH_CLIENT_ID,
-                "redirect_uri": self._get_oauth_redirect_uri(),
-                "response_type": "code",
-                "scope": OAUTH_SCOPE,
-                "state": self._oauth_state,
-                "code_challenge": code_challenge,
-                "code_challenge_method": "S256",
-            }
-        )
-        auth_url = f"{OAUTH_AUTHORIZE_URL}?{auth_params}"
-
-        return self.async_external_step(
-            step_id="oauth",
-            url=auth_url,
-        )
-
-    async def async_step_oauth_callback(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Handle the OAuth callback from external authentication.
-
-        This is called by Home Assistant when the user returns from the OAuth
-        authorization page with an authorization code.
-        """
-        if user_input is None:
-            return self.async_abort(reason="oauth_failed")
-
-        # Exchange the authorization code for tokens
-        code = user_input.get("code")
-        state = user_input.get("state")
-
-        if not code:
-            return self.async_abort(reason="oauth_no_code")
-
-        if state != self._oauth_state:
-            return self.async_abort(reason="oauth_state_mismatch")
-
-        try:
-            token_data = await self._exchange_oauth_code(code)
-            self._oauth_token = token_data.get("access_token")
-            self._oauth_refresh_token = token_data.get("refresh_token")
-
-            if not self._oauth_token:
-                return self.async_abort(reason="oauth_token_failed")
-
-            _LOGGER.info("OAuth authentication successful")
-            return await self.async_step_mode()
-
-        except Exception as e:
-            _LOGGER.exception("OAuth token exchange failed: %s", e)
-            return self.async_abort(reason="oauth_exchange_failed")
-
-    async def _exchange_oauth_code(self, code: str) -> dict[str, Any]:
-        """Exchange OAuth authorization code for access token."""
-        import aiohttp
-
-        async with (
-            aiohttp.ClientSession() as session,
-            session.post(
-                OAUTH_TOKEN_URL,
-                data={
-                    "grant_type": "authorization_code",
-                    "code": code,
-                    "redirect_uri": self._get_oauth_redirect_uri(),
-                    "client_id": OAUTH_CLIENT_ID,
-                    "code_verifier": self._code_verifier,
-                },
-            ) as response,
-        ):
-            if response.status != 200:
-                text = await response.text()
-                _LOGGER.error("OAuth token request failed: %s - %s", response.status, text)
-                raise ValueError(f"Token request failed: {response.status}")
-
-            return await response.json()
-
-    def _get_oauth_redirect_uri(self) -> str:
-        """Get the OAuth redirect URI for this Home Assistant instance."""
-        # Use the external URL for OAuth callback
-        # This handles my.home-assistant.io cloud redirect
-        return f"{self.hass.config.external_url or self.hass.config.internal_url}/auth/external/callback"
+        # Continue to installation mode selection
+        return await self.async_step_mode()
 
     async def async_step_api_key(
         self, user_input: dict[str, Any] | None = None
@@ -340,6 +223,7 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
                 if not valid:
                     errors["base"] = "invalid_auth"
                 else:
+                    # Store for later use
                     self._api_key = api_key
                     self._api_url = api_url
                     # Move to installation mode selection
@@ -461,25 +345,33 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             self._selected_entities = user_input.get(CONF_SELECTED_ENTITIES, [])
-
-            if not self._selected_entities:
-                errors["base"] = "no_devices_selected"
-            else:
-                # In real mode, go directly to registration (no simulation)
-                self._enable_simulation = False
-                return await self._async_register_and_complete()
+            # Allow continuing with 0 devices - user can add devices later
+            # In real mode, go directly to registration (no simulation)
+            self._enable_simulation = False
+            return await self._async_register_and_complete()
 
         # Discover devices
         discovery = AmperaDeviceDiscovery(self.hass)
         self._discovered_devices = discovery.discover_devices()
 
         if not self._discovered_devices:
-            errors["base"] = "no_devices_found"
-            # Still show the form so user can go back
+            # No devices found - show informational message but allow continuing
+            # User can add devices later via options flow or by adding HA integrations
+            _LOGGER.info("No compatible devices found - user can continue without devices")
             return self.async_show_form(
                 step_id="devices",
-                data_schema=vol.Schema({}),
-                errors=errors,
+                data_schema=vol.Schema(
+                    {
+                        # Empty multi-select - user just clicks submit to continue
+                        vol.Optional(CONF_SELECTED_ENTITIES, default=[]): SelectSelector(
+                            SelectSelectorConfig(
+                                options=[],
+                                multiple=True,
+                                mode=SelectSelectorMode.LIST,
+                            )
+                        ),
+                    }
+                ),
                 description_placeholders={"device_count": "0"},
             )
 
@@ -575,12 +467,12 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
         """Register site and devices on Ampæra and complete setup."""
         errors: dict[str, str] = {}
 
-        # Create API client with appropriate credentials
-        if self._auth_method == AUTH_METHOD_OAUTH and self._oauth_token:
-            # Use OAuth token
+        # Determine auth method and create API client
+        if self._oauth_token:
+            auth_method = AUTH_METHOD_OAUTH
             client = AmperaApiClient(self._oauth_token, base_url=self._api_url)
         else:
-            # Use API key
+            auth_method = AUTH_METHOD_API_KEY
             client = AmperaApiClient(self._api_key, base_url=self._api_url)
 
         try:
@@ -609,18 +501,25 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
                 device_data = []
 
-            # Register devices (may be empty in simulation mode)
-            _LOGGER.info(
-                "Registering %d devices (mode: %s)",
-                len(device_data),
-                self._installation_mode,
-            )
-            devices_response = await client.async_register_devices(
-                site_id=self._site_id,
-                devices=device_data,
-            )
-            self._device_mappings = devices_response["device_mappings"]
-            _LOGGER.info("Registered %d devices", devices_response["registered"])
+            # Register devices (skip if empty - simulation mode creates devices later)
+            if device_data:
+                _LOGGER.info(
+                    "Registering %d devices (mode: %s)",
+                    len(device_data),
+                    self._installation_mode,
+                )
+                devices_response = await client.async_register_devices(
+                    site_id=self._site_id,
+                    devices=device_data,
+                )
+                self._device_mappings = devices_response["device_mappings"]
+                _LOGGER.info("Registered %d devices", devices_response["registered"])
+            else:
+                _LOGGER.info(
+                    "No devices to register (mode: %s) - skipping device registration",
+                    self._installation_mode,
+                )
+                self._device_mappings = {}
 
             # Check if already configured (by HA instance ID)
             await self.async_set_unique_id(self._ha_instance_id)
@@ -634,7 +533,7 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
 
             # Build config data based on auth method
             config_data = {
-                CONF_AUTH_METHOD: self._auth_method,
+                CONF_AUTH_METHOD: auth_method,
                 CONF_API_URL: self._api_url,
                 CONF_SITE_ID: self._site_id,
                 CONF_SITE_NAME: self._site_name,
@@ -651,7 +550,7 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
             }
 
             # Store credentials based on auth method
-            if self._auth_method == AUTH_METHOD_OAUTH:
+            if auth_method == AUTH_METHOD_OAUTH:
                 config_data[CONF_OAUTH_TOKEN] = self._oauth_token
                 config_data[CONF_OAUTH_REFRESH_TOKEN] = self._oauth_refresh_token
             else:
@@ -738,6 +637,10 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> OptionsFlow:
         """Get the options flow for this handler."""
         return AmperaOptionsFlow(config_entry)
+
+
+# Alias for backward compatibility - HA uses domain lookup
+AmperaConfigFlow = AmperaOAuth2FlowHandler
 
 
 class AmperaOptionsFlow(OptionsFlow):

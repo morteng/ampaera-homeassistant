@@ -17,13 +17,16 @@ https://github.com/morteng/ampaera-homeassistant
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from homeassistant.components import persistent_notification
-from homeassistant.core import ServiceCall
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers.config_entry_oauth2_flow import async_register_implementation
 
 from .api import AmperaApiClient, AmperaAuthError, AmperaConnectionError
 from .command_service import AmperaCommandService
@@ -55,12 +58,27 @@ from .event_service import AmperaEventService
 from .push_service import AmperaTelemetryPushService, EntityMapping
 from .services import async_setup_services as async_setup_simulation_services
 from .services import async_unload_services as async_unload_simulation_services
-
-if TYPE_CHECKING:
-    from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
+from .application_credentials import AmperaOAuth2Implementation
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Set up the Ampæra integration.
+
+    This is called once when the integration is first loaded.
+    We register our OAuth2 implementation here so it's available
+    for the config flow.
+    """
+    # Register our built-in OAuth2 implementation
+    # This allows users to authenticate without creating their own OAuth app
+    async_register_implementation(
+        hass,
+        DOMAIN,
+        AmperaOAuth2Implementation(hass),
+    )
+
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -254,8 +272,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             entry.options.get(CONF_SIMULATION_WATER_HEATER_TYPE, "smart"),
         )
         _LOGGER.info(
-            "Household simulation ENABLED - Profile: %s, Water heater: %s. "
-            "Ensure simulation packages are added to your configuration.yaml",
+            "Household simulation ENABLED - Profile: %s, Water heater: %s",
             household_profile,
             wh_type,
         )
@@ -265,6 +282,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "household_profile": household_profile,
             "water_heater_type": wh_type,
         }
+
+        # Auto-setup ampaera_sim integration if not already configured
+        await _async_setup_simulation_integration(hass, entry)
 
     # Auto-create dashboard (non-blocking, errors don't fail setup)
     await _async_setup_dashboard(hass, entry)
@@ -307,6 +327,103 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
 
     hass.services.async_register(DOMAIN, "force_sync", handle_force_sync)
     hass.services.async_register(DOMAIN, "push_telemetry", handle_push_telemetry)
+
+
+async def _async_setup_simulation_integration(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Auto-setup the ampaera_sim integration when simulation mode is enabled.
+
+    This creates a config entry for ampaera_sim with all simulation devices enabled,
+    so users don't need to manually add the simulation integration.
+
+    After creating ampaera_sim, schedules a delayed device sync to pick up
+    the newly created simulation entities.
+    """
+    AMPAERA_SIM_DOMAIN = "ampaera_sim"
+
+    # Check if ampaera_sim is already configured
+    existing_entries = hass.config_entries.async_entries(AMPAERA_SIM_DOMAIN)
+    if existing_entries:
+        _LOGGER.debug("ampaera_sim already configured, skipping auto-setup")
+        return
+
+    # Check if ampaera_sim integration is available
+    if AMPAERA_SIM_DOMAIN not in hass.config.components:
+        # Try to load it
+        try:
+            await hass.config_entries.flow.async_init(
+                AMPAERA_SIM_DOMAIN,
+                context={"source": "integration_discovery"},
+                data={
+                    "devices": ["water_heater", "ev_charger", "household", "ams_meter"],
+                },
+            )
+            _LOGGER.info("Auto-initiated ampaera_sim setup flow")
+        except Exception as err:
+            _LOGGER.warning(
+                "Could not auto-setup ampaera_sim integration: %s. "
+                "Please add 'Ampæra Simulation' integration manually.",
+                err,
+            )
+            return
+
+    # Create config entry directly for ampaera_sim
+    sim_created = False
+    try:
+        result = await hass.config_entries.flow.async_init(
+            AMPAERA_SIM_DOMAIN,
+            context={"source": "import"},
+            data={
+                "devices": ["water_heater", "ev_charger", "household", "ams_meter"],
+            },
+        )
+        if result.get("type") == "create_entry":
+            _LOGGER.info(
+                "Auto-created ampaera_sim config entry for simulation devices"
+            )
+            sim_created = True
+        else:
+            _LOGGER.debug("ampaera_sim flow result: %s", result)
+    except Exception as err:
+        _LOGGER.warning(
+            "Could not auto-create ampaera_sim config entry: %s. "
+            "Please add 'Ampæra Simulation' integration manually.",
+            err,
+        )
+
+    # If we just created ampaera_sim, schedule a delayed device sync
+    # to pick up the simulation entities after they're fully created
+    _LOGGER.info("sim_created = %s, will schedule delayed sync: %s", sim_created, sim_created)
+    if sim_created:
+        async def _delayed_sync() -> None:
+            """Trigger device sync after ampaera_sim entities are ready."""
+            try:
+                # Wait for ampaera_sim to fully set up its entities
+                _LOGGER.info("Delayed sync task STARTED, waiting 15 seconds...")
+                await asyncio.sleep(15)
+                _LOGGER.info("Triggering device sync after ampaera_sim setup")
+
+                # Find our device sync service and trigger a sync
+                entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+                if entry_data and isinstance(entry_data, dict):
+                    sync_service = entry_data.get("device_sync_service")
+                    if sync_service:
+                        await sync_service.async_sync_now()
+                        _LOGGER.info("Post-simulation device sync completed")
+                    else:
+                        _LOGGER.warning("Device sync service not found in entry data")
+                else:
+                    _LOGGER.warning(
+                        "Entry data not found for %s (available: %s)",
+                        entry.entry_id,
+                        list(hass.data.get(DOMAIN, {}).keys()),
+                    )
+            except Exception as err:
+                _LOGGER.error("Delayed sync failed: %s", err)
+
+        # Schedule the delayed sync without blocking setup
+        _LOGGER.info("Scheduling delayed sync task for ampaera_sim entities...")
+        hass.async_create_task(_delayed_sync(), name="ampaera_delayed_sync")
+        _LOGGER.info("Delayed sync task scheduled successfully")
 
 
 async def _async_setup_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:

@@ -261,12 +261,39 @@ class AmperaDeviceSyncService:
         - Device IDs (ha_device_id): New configs with device grouping
         - Entity IDs (sensor.xxx): Legacy configs before device grouping
 
+        In simulation mode (enable_simulation=True), automatically includes
+        all ampaera_sim devices without requiring explicit selection.
+
         Args:
             all_devices: All discovered devices
 
         Returns:
             List of devices that match the selection
         """
+        from .const import CONF_ENABLE_SIMULATION
+
+        # Check if simulation mode is enabled
+        simulation_enabled = self._entry.data.get(CONF_ENABLE_SIMULATION, False)
+
+        if simulation_enabled:
+            # In simulation mode, auto-include all ampaera_sim devices
+            sim_devices = [
+                d for d in all_devices
+                if any(
+                    "simulated_" in entity_id or "ampaera_sim" in entity_id
+                    for entity_id in d.entity_mapping.values()
+                )
+                or "simulated_" in d.primary_entity_id
+                or (d.manufacturer and "Ampæra" in d.manufacturer)
+            ]
+            if sim_devices:
+                _LOGGER.info(
+                    "Simulation mode: auto-including %d ampaera_sim devices",
+                    len(sim_devices),
+                )
+                return sim_devices
+            # Fall through to normal filtering if no sim devices found yet
+
         if not self._selected_device_ids:
             return []
 
