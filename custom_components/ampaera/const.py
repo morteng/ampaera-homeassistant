@@ -94,6 +94,21 @@ CONF_ENABLE_SSE: Final = "enable_sse"
 # Configuration - API URL (for development override)
 CONF_API_URL: Final = "api_url"
 
+# Configuration - OAuth2 (for OAuth flow instead of API key)
+CONF_OAUTH_TOKEN: Final = "oauth_token"
+CONF_OAUTH_REFRESH_TOKEN: Final = "oauth_refresh_token"
+CONF_AUTH_METHOD: Final = "auth_method"
+AUTH_METHOD_API_KEY: Final = "api_key"
+AUTH_METHOD_OAUTH: Final = "oauth"
+
+# OAuth2 Configuration
+# Production URLs - uses punycode domain for OAuth
+OAUTH_BASE_URL: Final = "https://xn--ampra-ura.no"
+OAUTH_AUTHORIZE_URL: Final = f"{OAUTH_BASE_URL}/oauth/authorize"
+OAUTH_TOKEN_URL: Final = f"{OAUTH_BASE_URL}/oauth/token"
+OAUTH_CLIENT_ID: Final = "home-assistant"  # Pre-registered client
+OAUTH_SCOPE: Final = "ha:full"
+
 # Defaults
 DEFAULT_POLLING_INTERVAL: Final = 30  # seconds (telemetry push debounce)
 DEFAULT_COMMAND_POLL_INTERVAL: Final = 10  # seconds (command polling)

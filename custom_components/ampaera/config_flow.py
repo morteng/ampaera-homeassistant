@@ -1,11 +1,16 @@
 """Config flow for Ampæra Energy integration (v2.0 Push Architecture).
 
 Handles the setup wizard for adding the integration to Home Assistant:
-1. User enters API key
-2. User configures site (name, grid region)
-3. User selects which HA devices to sync
-4. Integration registers site and devices on Ampæra
-5. Integration starts push services
+1. User chooses authentication method (OAuth or API key)
+2. User authenticates (OAuth flow or API key entry)
+3. User configures site (name, grid region)
+4. User selects which HA devices to sync
+5. Integration registers site and devices on Ampæra
+6. Integration starts push services
+7. Optional: Auto-creates Lovelace dashboard
+
+OAuth2 is the recommended authentication method - it's simpler for users.
+API key is available as a fallback for advanced users or local setups.
 """
 
 from __future__ import annotations
@@ -43,8 +48,11 @@ from .api import (
     AmperaConnectionError,
 )
 from .const import (
+    AUTH_METHOD_API_KEY,
+    AUTH_METHOD_OAUTH,
     CONF_API_KEY,
     CONF_API_URL,
+    CONF_AUTH_METHOD,
     CONF_COMMAND_POLL_INTERVAL,
     CONF_DEV_MODE,
     CONF_DEVICE_MAPPINGS,
@@ -54,6 +62,8 @@ from .const import (
     CONF_GRID_REGION,
     CONF_HA_INSTANCE_ID,
     CONF_INSTALLATION_MODE,
+    CONF_OAUTH_REFRESH_TOKEN,
+    CONF_OAUTH_TOKEN,
     CONF_POLLING_INTERVAL,
     CONF_SELECTED_ENTITIES,
     CONF_SIMULATION_HOUSEHOLD_PROFILE,
@@ -69,12 +79,22 @@ from .const import (
     INSTALLATION_MODE_REAL,
     INSTALLATION_MODE_SIMULATION,
     INSTALLATION_MODES,
+    OAUTH_AUTHORIZE_URL,
+    OAUTH_CLIENT_ID,
+    OAUTH_SCOPE,
+    OAUTH_TOKEN_URL,
     SIMULATION_PROFILES,
     SIMULATION_WH_TYPES,
 )
 from .device_discovery import AmperaDeviceDiscovery
 
 _LOGGER = logging.getLogger(__name__)
+
+# Authentication method options for config flow
+AUTH_METHODS = [
+    (AUTH_METHOD_OAUTH, "Connect with Ampæra Account (Recommended)"),
+    (AUTH_METHOD_API_KEY, "Use API Key (Advanced)"),
+]
 
 
 def _generate_ha_instance_id() -> str:
@@ -85,19 +105,27 @@ def _generate_ha_instance_id() -> str:
 class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Ampæra Energy.
 
-    The flow (v2.0 Push Architecture):
-    1. user step: Enter API key
-    2. location step: Configure site (name, grid region)
-    3. devices step: Select HA devices to sync
-    4. Register site and devices on Ampæra
+    The flow (v2.0 Push Architecture with OAuth):
+    1. user step: Choose authentication method (OAuth or API key)
+    2a. oauth step: OAuth2 flow with Ampæra account
+    2b. api_key step: Enter API key manually
+    3. mode step: Choose real devices or simulation
+    4. location step: Configure site (name, grid region)
+    5. devices step: Select HA devices to sync
+    6. Register site and devices on Ampæra
     """
 
-    VERSION = 2  # Bump version for new config structure
+    VERSION = 3  # Bump version for OAuth config structure
 
     def __init__(self) -> None:
         """Initialize the config flow."""
+        # Authentication
+        self._auth_method: str = AUTH_METHOD_OAUTH
         self._api_key: str | None = None
+        self._oauth_token: str | None = None
+        self._oauth_refresh_token: str | None = None
         self._api_url: str = DEFAULT_API_BASE_URL
+        # Site configuration
         self._site_name: str = "Home"
         self._grid_region: str = "NO1"
         self._ha_instance_id: str = _generate_ha_instance_id()
@@ -111,9 +139,184 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
         self._enable_simulation: bool = False
         self._simulation_profile: str = "family"
         self._simulation_wh_type: str = "smart"
+        # OAuth state for PKCE
+        self._oauth_state: str | None = None
+        self._code_verifier: str | None = None
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Handle the initial step - API key entry."""
+        """Handle the initial step - authentication method selection.
+
+        Users can choose between:
+        - OAuth2 (recommended): Click to connect with Ampæra account
+        - API Key (advanced): Enter API key manually
+        """
+        if user_input is not None:
+            auth_method = user_input.get(CONF_AUTH_METHOD, AUTH_METHOD_OAUTH)
+            self._auth_method = auth_method
+
+            if auth_method == AUTH_METHOD_OAUTH:
+                # Start OAuth2 flow
+                return await self.async_step_oauth()
+            else:
+                # Go to API key entry
+                return await self.async_step_api_key()
+
+        # Build auth method options
+        auth_options = [SelectOptionDict(value=code, label=name) for code, name in AUTH_METHODS]
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_AUTH_METHOD, default=AUTH_METHOD_OAUTH): SelectSelector(
+                        SelectSelectorConfig(
+                            options=auth_options,
+                            mode=SelectSelectorMode.LIST,
+                        )
+                    ),
+                }
+            ),
+        )
+
+    async def async_step_oauth(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Handle OAuth2 authentication step.
+
+        This step initiates the OAuth2 flow by redirecting the user to Ampæra's
+        authorization page. After the user logs in and approves, they're redirected
+        back to Home Assistant with an authorization code.
+        """
+        import base64
+        import hashlib
+        import secrets
+
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            # This is called when returning from OAuth
+            # The auth code and state are passed in user_input
+            code = user_input.get("code")
+            state = user_input.get("state")
+
+            if not code:
+                errors["base"] = "oauth_failed"
+            elif state != self._oauth_state:
+                errors["base"] = "oauth_state_mismatch"
+            else:
+                # Exchange code for token
+                try:
+                    token_data = await self._exchange_oauth_code(code)
+                    self._oauth_token = token_data.get("access_token")
+                    self._oauth_refresh_token = token_data.get("refresh_token")
+
+                    if self._oauth_token:
+                        _LOGGER.info("OAuth authentication successful")
+                        # Move to installation mode selection
+                        return await self.async_step_mode()
+                    else:
+                        errors["base"] = "oauth_token_failed"
+
+                except Exception as e:
+                    _LOGGER.exception("OAuth token exchange failed: %s", e)
+                    errors["base"] = "oauth_failed"
+
+        # Generate PKCE code verifier and challenge
+        self._code_verifier = secrets.token_urlsafe(64)
+        code_challenge = base64.urlsafe_b64encode(
+            hashlib.sha256(self._code_verifier.encode("ascii")).digest()
+        ).rstrip(b"=").decode("ascii")
+
+        # Generate state for CSRF protection
+        self._oauth_state = secrets.token_urlsafe(32)
+
+        # Build OAuth authorization URL
+        from urllib.parse import urlencode
+
+        auth_params = urlencode({
+            "client_id": OAUTH_CLIENT_ID,
+            "redirect_uri": self._get_oauth_redirect_uri(),
+            "response_type": "code",
+            "scope": OAUTH_SCOPE,
+            "state": self._oauth_state,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
+        })
+        auth_url = f"{OAUTH_AUTHORIZE_URL}?{auth_params}"
+
+        return self.async_external_step(
+            step_id="oauth",
+            url=auth_url,
+        )
+
+    async def async_step_oauth_callback(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle the OAuth callback from external authentication.
+
+        This is called by Home Assistant when the user returns from the OAuth
+        authorization page with an authorization code.
+        """
+        if user_input is None:
+            return self.async_abort(reason="oauth_failed")
+
+        # Exchange the authorization code for tokens
+        code = user_input.get("code")
+        state = user_input.get("state")
+
+        if not code:
+            return self.async_abort(reason="oauth_no_code")
+
+        if state != self._oauth_state:
+            return self.async_abort(reason="oauth_state_mismatch")
+
+        try:
+            token_data = await self._exchange_oauth_code(code)
+            self._oauth_token = token_data.get("access_token")
+            self._oauth_refresh_token = token_data.get("refresh_token")
+
+            if not self._oauth_token:
+                return self.async_abort(reason="oauth_token_failed")
+
+            _LOGGER.info("OAuth authentication successful")
+            return await self.async_step_mode()
+
+        except Exception as e:
+            _LOGGER.exception("OAuth token exchange failed: %s", e)
+            return self.async_abort(reason="oauth_exchange_failed")
+
+    async def _exchange_oauth_code(self, code: str) -> dict[str, Any]:
+        """Exchange OAuth authorization code for access token."""
+        import aiohttp
+
+        async with (
+            aiohttp.ClientSession() as session,
+            session.post(
+                OAUTH_TOKEN_URL,
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": self._get_oauth_redirect_uri(),
+                    "client_id": OAUTH_CLIENT_ID,
+                    "code_verifier": self._code_verifier,
+                },
+            ) as response,
+        ):
+            if response.status != 200:
+                text = await response.text()
+                _LOGGER.error("OAuth token request failed: %s - %s", response.status, text)
+                raise ValueError(f"Token request failed: {response.status}")
+
+            return await response.json()
+
+    def _get_oauth_redirect_uri(self) -> str:
+        """Get the OAuth redirect URI for this Home Assistant instance."""
+        # Use the external URL for OAuth callback
+        # This handles my.home-assistant.io cloud redirect
+        return f"{self.hass.config.external_url or self.hass.config.internal_url}/auth/external/callback"
+
+    async def async_step_api_key(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle API key entry step (fallback authentication)."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -151,7 +354,7 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
                 await client.close()
 
         return self.async_show_form(
-            step_id="user",
+            step_id="api_key",
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_API_KEY): TextSelector(
@@ -368,7 +571,14 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
         """Register site and devices on Ampæra and complete setup."""
         errors: dict[str, str] = {}
 
-        client = AmperaApiClient(self._api_key, base_url=self._api_url)
+        # Create API client with appropriate credentials
+        if self._auth_method == AUTH_METHOD_OAUTH and self._oauth_token:
+            # Use OAuth token
+            client = AmperaApiClient(self._oauth_token, base_url=self._api_url)
+        else:
+            # Use API key
+            client = AmperaApiClient(self._api_key, base_url=self._api_url)
+
         try:
             # Register site
             _LOGGER.info(
@@ -417,24 +627,35 @@ class AmperaConfigFlow(ConfigFlow, domain=DOMAIN):
             title_suffix = (
                 " (Simulation)" if self._installation_mode == INSTALLATION_MODE_SIMULATION else ""
             )
+
+            # Build config data based on auth method
+            config_data = {
+                CONF_AUTH_METHOD: self._auth_method,
+                CONF_API_URL: self._api_url,
+                CONF_SITE_ID: self._site_id,
+                CONF_SITE_NAME: self._site_name,
+                CONF_GRID_REGION: self._grid_region,
+                CONF_HA_INSTANCE_ID: self._ha_instance_id,
+                CONF_SELECTED_ENTITIES: self._selected_entities,
+                CONF_DEVICE_MAPPINGS: self._device_mappings,
+                # Installation mode - mutually exclusive
+                CONF_INSTALLATION_MODE: self._installation_mode,
+                # Simulation config (only used in simulation mode)
+                CONF_ENABLE_SIMULATION: self._enable_simulation,
+                CONF_SIMULATION_HOUSEHOLD_PROFILE: self._simulation_profile,
+                CONF_SIMULATION_WATER_HEATER_TYPE: self._simulation_wh_type,
+            }
+
+            # Store credentials based on auth method
+            if self._auth_method == AUTH_METHOD_OAUTH:
+                config_data[CONF_OAUTH_TOKEN] = self._oauth_token
+                config_data[CONF_OAUTH_REFRESH_TOKEN] = self._oauth_refresh_token
+            else:
+                config_data[CONF_API_KEY] = self._api_key
+
             return self.async_create_entry(
                 title=f"{self._site_name}{title_suffix}",
-                data={
-                    CONF_API_KEY: self._api_key,
-                    CONF_API_URL: self._api_url,
-                    CONF_SITE_ID: self._site_id,
-                    CONF_SITE_NAME: self._site_name,
-                    CONF_GRID_REGION: self._grid_region,
-                    CONF_HA_INSTANCE_ID: self._ha_instance_id,
-                    CONF_SELECTED_ENTITIES: self._selected_entities,
-                    CONF_DEVICE_MAPPINGS: self._device_mappings,
-                    # Installation mode - mutually exclusive
-                    CONF_INSTALLATION_MODE: self._installation_mode,
-                    # Simulation config (only used in simulation mode)
-                    CONF_ENABLE_SIMULATION: self._enable_simulation,
-                    CONF_SIMULATION_HOUSEHOLD_PROFILE: self._simulation_profile,
-                    CONF_SIMULATION_WATER_HEATER_TYPE: self._simulation_wh_type,
-                },
+                data=config_data,
             )
 
         except AmperaAuthError as e:

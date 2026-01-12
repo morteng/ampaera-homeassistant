@@ -3,6 +3,17 @@
     "step": {
       "user": {
         "title": "Connect to Ampæra",
+        "description": "Choose how to authenticate with your Ampæra account. **Sign in with Ampæra** (recommended) uses secure OAuth and is the easiest option. **API Key** is for advanced users who prefer manual configuration.",
+        "data": {
+          "auth_method": "Authentication method"
+        }
+      },
+      "oauth": {
+        "title": "Sign in to Ampæra",
+        "description": "Click the button below to sign in with your Ampæra account. You'll be redirected to Ampæra to authorize Home Assistant access."
+      },
+      "api_key": {
+        "title": "Enter API Key",
         "description": "Enter your API key from Settings → API in the Ampæra web app. Leave API URL empty to use production ({default_url}).",
         "data": {
           "api_key": "API Key",
@@ -48,23 +59,27 @@
       },
       "reauth_confirm": {
         "title": "Reauthenticate Ampæra",
-        "description": "Your API key has expired. Please enter a new API key.",
+        "description": "Your session has expired. Please sign in again.",
         "data": {
           "api_key": "API Key"
         }
       }
     },
     "error": {
-      "invalid_auth": "Invalid API key",
+      "invalid_auth": "Invalid credentials",
       "cannot_connect": "Cannot connect to Ampæra",
       "no_devices_found": "No compatible devices found in Home Assistant",
       "no_devices_selected": "Please select at least one device",
       "registration_failed": "Failed to register with Ampæra",
+      "oauth_failed": "OAuth authentication failed. Please try again.",
+      "oauth_timeout": "OAuth authentication timed out. Please try again.",
+      "oauth_cancelled": "OAuth authentication was cancelled.",
       "unknown": "An unexpected error occurred"
     },
     "abort": {
       "already_configured": "This Home Assistant instance is already configured",
-      "reauth_successful": "Reauthentication successful"
+      "reauth_successful": "Reauthentication successful",
+      "oauth_error": "OAuth error: {error}"
     }
   },
   "options": {
@@ -92,5 +107,8 @@
         }
       }
     }
+  },
+  "application_credentials": {
+    "description": "Ampæra Energy uses OAuth for secure authentication. Click **Add** to connect your Ampæra account."
   }
 }

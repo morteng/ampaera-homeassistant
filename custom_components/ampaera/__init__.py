@@ -18,19 +18,26 @@ https://github.com/morteng/ampaera-homeassistant
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+from homeassistant.components import persistent_notification
 from homeassistant.core import ServiceCall
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 
 from .api import AmperaApiClient, AmperaAuthError, AmperaConnectionError
 from .command_service import AmperaCommandService
 from .const import (
+    AUTH_METHOD_API_KEY,
+    AUTH_METHOD_OAUTH,
     CONF_API_KEY,
     CONF_API_URL,
+    CONF_AUTH_METHOD,
     CONF_COMMAND_POLL_INTERVAL,
     CONF_DEVICE_SYNC_INTERVAL,
     CONF_ENABLE_SIMULATION,
+    CONF_GRID_REGION,
+    CONF_OAUTH_TOKEN,
     CONF_POLLING_INTERVAL,
     CONF_SELECTED_ENTITIES,
     CONF_SIMULATION_HOUSEHOLD_PROFILE,
@@ -68,8 +75,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """
     hass.data.setdefault(DOMAIN, {})
 
-    # Get config data
-    api_key = entry.data[CONF_API_KEY]
+    # Get config data - support both OAuth and API key auth
+    auth_method = entry.data.get(CONF_AUTH_METHOD, AUTH_METHOD_API_KEY)
+    if auth_method == AUTH_METHOD_OAUTH:
+        api_token = entry.data.get(CONF_OAUTH_TOKEN)
+        if not api_token:
+            raise ConfigEntryAuthFailed("OAuth token missing")
+    else:
+        api_token = entry.data.get(CONF_API_KEY)
+        if not api_token:
+            raise ConfigEntryAuthFailed("API key missing")
+
     api_url = entry.data.get(CONF_API_URL, DEFAULT_API_BASE_URL)
     site_id = entry.data[CONF_SITE_ID]
     site_name = entry.data.get(CONF_SITE_NAME, "Home")
@@ -84,10 +100,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         CONF_DEVICE_SYNC_INTERVAL, DEFAULT_DEVICE_SYNC_INTERVAL
     )
 
-    _LOGGER.debug("Connecting to Ampæra API at %s", api_url)
+    _LOGGER.debug("Connecting to Ampæra API at %s (auth: %s)", api_url, auth_method)
 
     # Create the API client
-    api = AmperaApiClient(api_key, base_url=api_url)
+    api = AmperaApiClient(api_token, base_url=api_url)
 
     # Validate the token
     try:
@@ -250,6 +266,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "water_heater_type": wh_type,
         }
 
+    # Auto-create dashboard (non-blocking, errors don't fail setup)
+    await _async_setup_dashboard(hass, entry)
+
     _LOGGER.info(
         "Ampæra integration started for site '%s' (%s) with %d devices, %d entities%s",
         site_name,
@@ -288,6 +307,68 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
 
     hass.services.async_register(DOMAIN, "force_sync", handle_force_sync)
     hass.services.async_register(DOMAIN, "push_telemetry", handle_push_telemetry)
+
+
+async def _async_setup_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Auto-create Lovelace dashboard from template.
+
+    Creates a ready-to-use dashboard YAML in the user's dashboards directory
+    and notifies them about it.
+    """
+    site_id = entry.data[CONF_SITE_ID]
+    site_name = entry.data.get(CONF_SITE_NAME, "Home")
+    grid_region = entry.data.get(CONF_GRID_REGION, "NO1")
+
+    # Load dashboard template
+    template_path = Path(__file__).parent / "dashboards" / "ampaera_dashboard.yaml"
+    if not template_path.exists():
+        _LOGGER.warning("Dashboard template not found at %s", template_path)
+        return
+
+    try:
+        template = template_path.read_text(encoding="utf-8")
+
+        # Substitute placeholders
+        dashboard_content = (
+            template.replace("{site_id}", site_id)
+            .replace("{site_name}", site_name)
+            .replace("{grid_region}", grid_region)
+        )
+
+        # Create dashboards directory if needed
+        dashboards_dir = Path(hass.config.path("dashboards"))
+        dashboards_dir.mkdir(exist_ok=True)
+
+        # Write dashboard file (use first 8 chars of site_id for filename)
+        dashboard_file = dashboards_dir / f"ampaera_{site_id[:8]}.yaml"
+
+        # Only create if it doesn't already exist (don't overwrite user customizations)
+        if not dashboard_file.exists():
+            dashboard_file.write_text(dashboard_content, encoding="utf-8")
+            _LOGGER.info("Created Ampæra dashboard at %s", dashboard_file)
+
+            # Notify user
+            persistent_notification.async_create(
+                hass,
+                (
+                    f"Your Ampæra Energy dashboard for **{site_name}** is ready!\n\n"
+                    "To enable it:\n"
+                    "1. Go to **Settings** → **Dashboards**\n"
+                    "2. Click **Add Dashboard**\n"
+                    "3. Select **Use existing YAML file**\n"
+                    f"4. Enter path: `dashboards/ampaera_{site_id[:8]}.yaml`\n\n"
+                    "The dashboard includes real-time power, energy graphs, "
+                    "device controls, and spot prices."
+                ),
+                title="Ampæra Dashboard Created",
+                notification_id=f"ampaera_dashboard_{site_id[:8]}",
+            )
+        else:
+            _LOGGER.debug("Dashboard already exists at %s, skipping", dashboard_file)
+
+    except Exception as err:
+        _LOGGER.error("Failed to create dashboard: %s", err)
+        # Don't fail the integration setup for dashboard issues
 
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -392,7 +473,7 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 
 async def async_migrate_entry(
-    hass: HomeAssistant,  # noqa: ARG001
+    hass: HomeAssistant,
     entry: ConfigEntry,
 ) -> bool:
     """Migrate old config entry to new version.
@@ -400,7 +481,7 @@ async def async_migrate_entry(
     Called when config entry version changes (VERSION in config_flow.py).
     """
     _LOGGER.debug(
-        "Migrating config entry from version %s to version 2",
+        "Migrating config entry from version %s to version 3",
         entry.version,
     )
 
@@ -413,5 +494,14 @@ async def async_migrate_entry(
         )
         # Return False to trigger reconfiguration
         return False
+
+    if entry.version == 2:
+        # Migration from v2 (API key only) to v3 (OAuth + API key support)
+        # Add auth_method field with default to api_key for existing entries
+        new_data = {**entry.data, CONF_AUTH_METHOD: AUTH_METHOD_API_KEY}
+        hass.config_entries.async_update_entry(entry, data=new_data, version=3)
+        _LOGGER.info(
+            "Migrated config entry to version 3 (added auth_method=api_key)"
+        )
 
     return True

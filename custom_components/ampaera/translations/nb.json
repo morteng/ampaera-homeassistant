@@ -3,6 +3,17 @@
     "step": {
       "user": {
         "title": "Koble til Ampæra",
+        "description": "Velg hvordan du vil autentisere med Ampæra-kontoen din. **Logg inn med Ampæra** (anbefalt) bruker sikker OAuth og er enklest. **API-nøkkel** er for avanserte brukere som foretrekker manuell konfigurasjon.",
+        "data": {
+          "auth_method": "Autentiseringsmetode"
+        }
+      },
+      "oauth": {
+        "title": "Logg inn på Ampæra",
+        "description": "Klikk på knappen nedenfor for å logge inn med Ampæra-kontoen din. Du blir sendt til Ampæra for å godkjenne Home Assistant-tilgang."
+      },
+      "api_key": {
+        "title": "Oppgi API-nøkkel",
         "description": "Oppgi API-nøkkelen din fra Innstillinger → API i Ampæra-appen. La API-URL stå tom for å bruke produksjon ({default_url}).",
         "data": {
           "api_key": "API-nøkkel",
@@ -36,35 +47,39 @@
       },
       "simulation": {
         "title": "Konfigurer simulering",
-        "description": "Konfigurer din simulerte husholdning for demoner og testing. Dette oppretter realistiske apparater (oppvaskmaskin, stekeovn, vaskemaskin, varmtvannsbereder, elbillader osv.) med norske daglige forbruksmønstre - alt kjører lokalt i Home Assistant.",
+        "description": "Konfigurer din simulerte husholdning for demoer og testing. Dette oppretter realistiske apparater (oppvaskmaskin, stekeovn, vaskemaskin, varmtvannsbereder, elbillader osv.) med norske daglige forbruksmønstre - alt kjører lokalt i Home Assistant.",
         "data": {
           "simulation_household_profile": "Husholdningsprofil",
           "simulation_water_heater_type": "Type varmtvannsbereder"
         },
         "data_description": {
           "simulation_household_profile": "Påvirker forbruksmønster, tidspunkt og apparatbruk",
-          "simulation_water_heater_type": "Gamle bereder har ingen temperatursensor, smarte har full kontroll"
+          "simulation_water_heater_type": "Gamle bereders har ingen temperatursensor, smarte har full kontroll"
         }
       },
       "reauth_confirm": {
         "title": "Autentiser Ampæra på nytt",
-        "description": "API-nøkkelen din har utløpt. Vennligst oppgi en ny API-nøkkel.",
+        "description": "Økten din har utløpt. Vennligst logg inn på nytt.",
         "data": {
           "api_key": "API-nøkkel"
         }
       }
     },
     "error": {
-      "invalid_auth": "Ugyldig API-nøkkel",
+      "invalid_auth": "Ugyldig pålogging",
       "cannot_connect": "Kan ikke koble til Ampæra",
       "no_devices_found": "Ingen kompatible enheter funnet i Home Assistant",
       "no_devices_selected": "Velg minst én enhet",
       "registration_failed": "Kunne ikke registrere hos Ampæra",
+      "oauth_failed": "OAuth-autentisering feilet. Vennligst prøv igjen.",
+      "oauth_timeout": "OAuth-autentisering tidsavbrutt. Vennligst prøv igjen.",
+      "oauth_cancelled": "OAuth-autentisering ble avbrutt.",
       "unknown": "En uventet feil oppstod"
     },
     "abort": {
       "already_configured": "Denne Home Assistant-installasjonen er allerede konfigurert",
-      "reauth_successful": "Autentisering vellykket"
+      "reauth_successful": "Autentisering vellykket",
+      "oauth_error": "OAuth-feil: {error}"
     }
   },
   "options": {
@@ -92,5 +107,8 @@
         }
       }
     }
+  },
+  "application_credentials": {
+    "description": "Ampæra Energy bruker OAuth for sikker autentisering. Klikk **Legg til** for å koble til Ampæra-kontoen din."
   }
 }
