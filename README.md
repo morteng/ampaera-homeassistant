@@ -8,6 +8,8 @@ Home Assistant custom integration for the **Ampæra Smart Home Energy Management
 
 ## Features
 
+- **OAuth2 Authentication** - Secure sign-in with your Ampæra account (recommended)
+- **Auto-Dashboard** - Ready-to-use Lovelace dashboard created automatically
 - **Real-time power monitoring** from Norwegian AMS smart meters
 - **Energy tracking** compatible with Home Assistant Energy Dashboard
 - **Device control** for water heaters and EV chargers
@@ -19,8 +21,98 @@ Home Assistant custom integration for the **Ampæra Smart Home Energy Management
 ## Requirements
 
 - Home Assistant 2024.1.0 or newer
-- Ampæra account with active subscription
-- API key from Ampæra web app
+- Ampæra account (free or with active subscription)
+
+---
+
+## Installation
+
+### Step 1: Install via HACS
+
+1. Open **HACS** in Home Assistant
+2. Click **Integrations** tab
+3. Click the **+ Explore & Download Repositories** button
+4. Search for **"Ampæra Energy"**
+5. Click on the integration, then click **Download**
+6. **Restart Home Assistant** (Settings → System → Restart)
+
+> **Alternative: Manual Installation**
+>
+> Download the [latest release](https://github.com/morteng/ampaera-homeassistant/releases), extract `custom_components/ampaera` to your Home Assistant `config/custom_components/` directory, and restart.
+
+### Step 2: Add the Integration
+
+After restarting Home Assistant:
+
+1. Go to **Settings → Devices & Services**
+2. Click the **+ Add Integration** button (bottom right)
+3. Search for **"Ampæra"** or **"Ampæra Energy"**
+4. Click on it to start the setup wizard
+
+### Step 3: Choose Authentication Method
+
+You'll see two options:
+
+| Method | Description | Recommended For |
+|--------|-------------|-----------------|
+| **Sign in with Ampæra** | OAuth2 - Click to authenticate with your Ampæra account | Most users ✅ |
+| **API Key** | Manual entry of API key from Ampæra settings | Advanced users, local setups |
+
+#### Option A: OAuth2 (Recommended)
+
+1. Select **"Connect with Ampæra Account"**
+2. Click **Submit**
+3. You'll be redirected to Ampæra's login page
+4. Log in with your Ampæra credentials
+5. Click **Authorize** to grant Home Assistant access
+6. You'll be redirected back to Home Assistant
+
+#### Option B: API Key (Advanced)
+
+1. Select **"Use API Key"**
+2. Log in to [ampæra.no](https://xn--ampra-ura.no) → **Settings → API**
+3. Click **Generate Token** and copy the key
+4. Paste the API key in Home Assistant
+5. Click **Submit**
+
+### Step 4: Choose Installation Mode
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| **Real Devices** | Connects to your physical smart devices | Production use |
+| **Simulation** | Creates simulated devices for testing | Demos, testing |
+
+> **Note**: Modes are mutually exclusive. You cannot mix simulated and real devices.
+
+### Step 5: Configure Your Site
+
+1. Enter a **Site Name** (e.g., "Home", "Cabin")
+2. Select your **Grid Region** (NO1-NO5) for accurate spot pricing
+
+### Step 6: Select Devices (Real Devices Mode)
+
+Choose which discovered devices to sync with Ampæra:
+- EV chargers
+- Water heaters
+- Power meters
+- Smart plugs
+
+### Step 7: Done! 🎉
+
+After setup completes:
+
+1. **Dashboard**: A ready-to-use Lovelace dashboard is automatically created
+   - Go to **Settings → Dashboards** to enable it
+   - Look for **"Ampæra Energy"** or **"Ampæra {site name}"**
+
+2. **Notification**: You'll receive a notification with setup confirmation
+
+3. **Energy Dashboard**: Optionally add to HA's Energy Dashboard:
+   - Go to **Settings → Dashboards → Energy**
+   - Click **Add consumption** under Electricity Grid
+   - Select **"Ampæra {site} Total Energy"**
+
+---
 
 ## Supported Devices
 
@@ -97,71 +189,7 @@ The integration uses a three-tier detection hierarchy:
 
 Norwegian keywords supported: `elbillader`, `varmtvannsbereder`, `strømmåler`, `lader`, `ladestasjon`
 
-## Installation
-
-### HACS (Recommended)
-
-1. Open HACS in Home Assistant
-2. Click "Integrations"
-3. Click the "+" button
-4. Search for "Ampæra Energy"
-5. Click "Download"
-6. Restart Home Assistant
-
-### Manual Installation
-
-1. Download the latest release from [GitHub](https://github.com/morteng/ampaera-homeassistant/releases)
-2. Extract and copy `custom_components/ampaera` to your `config/custom_components/` directory
-3. Restart Home Assistant
-
-## Configuration
-
-### Step 1: Generate API Key
-
-1. Log in to the [Ampæra web app](https://app.ampaera.no)
-2. Go to **Settings → API**
-3. Click **Generate Token**
-4. Copy the API key (you'll only see it once)
-
-### Step 2: Add Integration
-
-1. Go to **Settings → Devices & Services**
-2. Click **Add Integration**
-3. Search for "Ampæra"
-4. Enter your API key
-
-### Step 3: Choose Installation Mode
-
-After entering your API key, you'll choose between two modes:
-
-#### Real Devices Mode
-For production use with physical hardware:
-- Discovers and connects to your actual smart devices
-- Synchronizes device data with Ampæra cloud
-- Enables remote control from Ampæra dashboard
-
-#### Simulation Mode
-For demos and testing:
-- Creates simulated devices without real hardware
-- Generates realistic telemetry patterns
-- No physical device configuration needed
-- Entry shows "(Simulation)" in title to distinguish
-
-**Note**: Modes are mutually exclusive. You cannot mix simulated and real devices in the same installation.
-
-### Step 4: Configure Location
-
-Select your site name and Norwegian grid region (NO1-NO5) for accurate pricing.
-
-### Step 5: Select Devices (Real Devices Mode only)
-
-Choose which discovered devices to connect to Ampæra.
-
-### Step 6: Configure Energy Dashboard (Optional)
-
-1. Go to **Settings → Dashboards → Energy**
-2. Click **Add consumption** under Electricity Grid
-3. Select "Ampæra {site} Total Energy"
+---
 
 ## Entities
 
@@ -184,6 +212,8 @@ Choose which discovered devices to connect to Ampæra.
 | Water heater | Temperature and mode control | `turn_on`, `turn_off`, `set_temperature` |
 | EV charger | Charging control | `turn_on`, `turn_off`, `start_charge`, `stop_charge`, `set_current_limit` |
 | Device switch | On/off control | `turn_on`, `turn_off` |
+
+---
 
 ## Example Automations
 
@@ -238,13 +268,21 @@ automation:
           entity_id: switch.ampaera_ev_charger
 ```
 
+---
+
 ## Troubleshooting
 
 ### Cannot connect to Ampæra
 
-- Verify your API key is correct
+- Verify your credentials are correct
 - Check your internet connection
 - Ensure Ampæra services are online at [status.ampaera.no](https://status.ampaera.no)
+
+### OAuth authentication failed
+
+- Clear your browser cache and try again
+- Ensure you're logged in to your Ampæra account
+- Try using the API key method as fallback
 
 ### Entities show "unavailable"
 
@@ -258,26 +296,48 @@ automation:
 - Check that the device has the correct device class (energy, power, etc.)
 - Try adding the device manually if automatic discovery fails
 
+### Dashboard not appearing
+
+- Go to **Settings → Dashboards**
+- Look for the Ampæra dashboard and click to enable it
+- The dashboard is created in `config/dashboards/` folder
+
 ### Commands not working
 
 - Verify the device supports the command type
 - Check that the entity is online and available
 - EV chargers must be connected to a vehicle for charge commands
 
-### Version checking
+---
 
-The integration version is displayed in:
-- **Settings → Devices & Services → Ampæra → Configure**
-- **Developer Tools → Downloads → Integrations → ampaera**
+## Version History
+
+### v1.2.0 (Latest)
+- **OAuth2 Authentication** - Sign in with your Ampæra account (recommended)
+- **Auto-Dashboard** - Lovelace dashboard created automatically after setup
+- Improved Norwegian translations
+- Better error handling
+
+### v1.1.0
+- Simulation mode for demos and testing
+- Multi-site support
+- Installation mode selection (Real Devices vs Simulation)
+
+### v1.0.0
+- Initial release
+- Real-time telemetry push
+- Device discovery and control
+- Norwegian grid region support
+
+See [CHANGELOG.md](CHANGELOG.md) for full version history.
+
+---
 
 ## Support
 
 - [Report issues](https://github.com/morteng/amp/issues?q=label%3Ahomeassistant)
 - [Ampæra documentation](https://docs.ampaera.no)
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for version history.
+- [Ampæra web app](https://xn--ampra-ura.no)
 
 ## License
 
