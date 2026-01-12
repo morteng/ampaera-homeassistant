@@ -1,10 +1,18 @@
-# Ampæra Energy - Home Assistant Integration
+<p align="center">
+  <img src="custom_components/ampaera/logo.png" alt="Ampæra Energy" width="400">
+</p>
 
-[![HACS](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
-[![GitHub Release](https://img.shields.io/github/release/morteng/ampaera-homeassistant.svg)](https://github.com/morteng/ampaera-homeassistant/releases)
-[![License](https://img.shields.io/github/license/morteng/ampaera-homeassistant.svg)](LICENSE)
+<h1 align="center">Ampæra Energy - Home Assistant Integration</h1>
 
-Home Assistant custom integration for the **Ampæra Smart Home Energy Management Platform**.
+<p align="center">
+  <a href="https://github.com/hacs/integration"><img src="https://img.shields.io/badge/HACS-Default-41BDF5.svg" alt="HACS"></a>
+  <a href="https://github.com/morteng/ampaera-homeassistant/releases"><img src="https://img.shields.io/github/release/morteng/ampaera-homeassistant.svg" alt="GitHub Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+</p>
+
+<p align="center">
+  Home Assistant custom integration for the <strong>Ampæra Smart Home Energy Management Platform</strong>.
+</p>
 
 ## Features
 
