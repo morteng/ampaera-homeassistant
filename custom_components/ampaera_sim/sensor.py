@@ -90,6 +90,9 @@ async def async_setup_entry(
             HouseholdPowerSensor(coordinator),
             HouseholdEnergySensor(coordinator),
             HouseholdActivitySensor(coordinator),
+            HouseholdPresenceModeSensor(coordinator),
+            HouseholdBuildingTypeSensor(coordinator),
+            HouseholdOccupantsSensor(coordinator),
         ])
 
     async_add_entities(entities)
@@ -572,4 +575,62 @@ class HouseholdActivitySensor(HouseholdBaseSensor):
         """Return current activity."""
         if self.coordinator.household:
             return self.coordinator.household.activity
+        return None
+
+
+class HouseholdPresenceModeSensor(HouseholdBaseSensor):
+    """Household presence mode sensor (read-only mirror of select)."""
+
+    _attr_name = "Presence Mode Status"
+    _attr_icon = "mdi:home-account"
+
+    def __init__(self, coordinator: SimulationCoordinator) -> None:
+        """Initialize sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{DOMAIN}_household_presence_mode_status"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return current presence mode."""
+        if self.coordinator.household:
+            return self.coordinator.household.presence_mode
+        return None
+
+
+class HouseholdBuildingTypeSensor(HouseholdBaseSensor):
+    """Household building type sensor (read-only mirror of select)."""
+
+    _attr_name = "Building Type Status"
+    _attr_icon = "mdi:home-variant"
+
+    def __init__(self, coordinator: SimulationCoordinator) -> None:
+        """Initialize sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{DOMAIN}_household_building_type_status"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return current building type."""
+        if self.coordinator.household:
+            return self.coordinator.household.building_type
+        return None
+
+
+class HouseholdOccupantsSensor(HouseholdBaseSensor):
+    """Household occupants count sensor."""
+
+    _attr_name = "Occupants"
+    _attr_icon = "mdi:account-group"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: SimulationCoordinator) -> None:
+        """Initialize sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{DOMAIN}_household_occupants"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return current occupants count."""
+        if self.coordinator.household:
+            return self.coordinator.household.occupants
         return None
