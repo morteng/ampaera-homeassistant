@@ -54,8 +54,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     _LOGGER.info("Setting up Ampæra Simulation with devices: %s", devices)
 
-    # Create the simulation coordinator
-    coordinator = SimulationCoordinator(hass, devices)
+    # Create the simulation coordinator with options
+    options = dict(entry.options) if entry.options else {}
+    coordinator = SimulationCoordinator(hass, devices, options)
 
     # Perform initial data fetch
     await coordinator.async_config_entry_first_refresh()

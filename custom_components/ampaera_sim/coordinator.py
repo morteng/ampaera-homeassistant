@@ -58,12 +58,15 @@ class SimulationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     - Power meter readings (aggregate power, voltage, current)
     """
 
-    def __init__(self, hass: HomeAssistant, devices: list[str]) -> None:
+    def __init__(
+        self, hass: HomeAssistant, devices: list[str], options: dict | None = None
+    ) -> None:
         """Initialize the simulation coordinator.
 
         Args:
             hass: Home Assistant instance
             devices: List of device types to simulate (water_heater, ev_charger, ams_meter)
+            options: Optional config entry options (building_type, presence_mode)
         """
         super().__init__(
             hass,
@@ -72,6 +75,7 @@ class SimulationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=timedelta(seconds=UPDATE_INTERVAL_SECONDS),
         )
         self._devices = devices
+        self._options = options or {}
         self._last_update = dt_util.utcnow()
 
         # Initialize device states based on selected devices
@@ -87,6 +91,15 @@ class SimulationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.household: HouseholdState | None = (
             HouseholdState() if DEVICE_HOUSEHOLD in devices else None
         )
+
+        # Apply options to household if configured
+        if self.household and self._options:
+            if "building_type" in self._options:
+                self.household.building_type = self._options["building_type"]
+                _LOGGER.info("Set building_type to %s from options", self._options["building_type"])
+            if "presence_mode" in self._options:
+                self.household.presence_mode = self._options["presence_mode"]
+                _LOGGER.info("Set presence_mode to %s from options", self._options["presence_mode"])
 
         _LOGGER.debug(
             "Initialized SimulationCoordinator with devices: %s",
