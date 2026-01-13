@@ -18,6 +18,8 @@ from homeassistant.util import dt as dt_util
 from .const import (
     AMS_METER_NOMINAL_VOLTAGE,
     AMS_METER_VOLTAGE_VARIATION,
+    CABIN_EMPTY_PATTERNS,
+    CABIN_OCCUPIED_PATTERNS,
     DEVICE_AMS_METER,
     DEVICE_EV_CHARGER,
     DEVICE_HOUSEHOLD,
@@ -25,7 +27,10 @@ from .const import (
     DOMAIN,
     EV_CHARGER_EFFICIENCY,
     EV_CHARGER_VOLTAGE,
-    HOUSEHOLD_BASE_LOAD_W,
+    HOME_AWAY_PATTERNS,
+    HOUSEHOLD_BASE_LOAD_CABIN_EMPTY_W,
+    HOUSEHOLD_BASE_LOAD_CABIN_W,
+    HOUSEHOLD_BASE_LOAD_HOME_W,
     HOUSEHOLD_PATTERNS,
     UPDATE_INTERVAL_SECONDS,
     WATER_HEATER_HEAT_LOSS_C_PER_HOUR,
@@ -233,11 +238,13 @@ class SimulationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ev.status = "Connected - Waiting"
 
     def _update_household_physics(self, dt_hours: float) -> None:
-        """Update household background load based on time of day.
+        """Update household background load based on time of day and presence.
 
         Generates realistic varying power consumption based on:
         - Time of day (morning/evening peaks, night valley)
         - Day of week (weekday vs weekend patterns)
+        - Presence mode (home, away, vacation)
+        - Building type (home vs cabin/hytte)
         - Random variations for realism
 
         Args:
@@ -252,42 +259,109 @@ class SimulationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         hour = now.hour
         is_weekend = now.weekday() >= 5  # Saturday=5, Sunday=6
 
+        # Select pattern based on building type and presence
+        if hh.building_type == "cabin":
+            # Cabin (hytte) patterns
+            if hh.presence_mode == "home":
+                # Family is at the cabin
+                patterns = CABIN_OCCUPIED_PATTERNS
+                base_load = HOUSEHOLD_BASE_LOAD_CABIN_W
+            else:
+                # Cabin is empty
+                patterns = CABIN_EMPTY_PATTERNS
+                base_load = HOUSEHOLD_BASE_LOAD_CABIN_EMPTY_W
+        else:
+            # Primary home patterns
+            if hh.presence_mode == "home":
+                # Family is at home
+                patterns = HOUSEHOLD_PATTERNS
+                base_load = HOUSEHOLD_BASE_LOAD_HOME_W
+            elif hh.presence_mode == "away":
+                # Family is away (at cabin for weekend)
+                patterns = HOME_AWAY_PATTERNS
+                base_load = HOUSEHOLD_BASE_LOAD_HOME_W  # Keep base load for fridge etc.
+            else:
+                # Vacation - similar to away
+                patterns = HOME_AWAY_PATTERNS
+                base_load = HOUSEHOLD_BASE_LOAD_HOME_W
+
         # Get base load pattern for this hour
-        weekday_load, weekend_load = HOUSEHOLD_PATTERNS.get(hour, (300, 400))
+        weekday_load, weekend_load = patterns.get(hour, (300, 400))
         pattern_load = weekend_load if is_weekend else weekday_load
 
-        # Add random variation (±30% for realism)
-        variation = random.uniform(0.7, 1.3)
+        # Scale by occupants (4 is baseline)
+        if hh.presence_mode == "home":
+            occupant_factor = hh.occupants / 4.0
+            pattern_load *= occupant_factor
+
+        # Add random variation (±30% for realism when occupied, ±5% when empty)
+        if hh.presence_mode == "home":
+            variation = random.uniform(0.7, 1.3)
+        else:
+            variation = random.uniform(0.95, 1.05)
         activity_load = pattern_load * variation
 
-        # Add occasional random spikes (appliance cycles)
-        if random.random() < 0.05:  # 5% chance each update
-            spike = random.choice([
-                (1800, "Cooking"),      # Stove/oven
-                (2200, "Kettle"),       # Electric kettle
-                (1500, "Dishwasher"),   # Dishwasher heating
-                (2000, "Washing"),      # Washing machine heating
-                (900, "Toaster"),       # Toaster
-            ])
+        # Add occasional random spikes (appliance cycles) only when occupied
+        if hh.presence_mode == "home" and random.random() < 0.05:
+            if hh.building_type == "cabin":
+                # Cabin-specific appliances
+                spike = random.choice([
+                    (1500, "Sauna heating"),
+                    (2200, "Kettle"),
+                    (1000, "Cooking"),
+                    (800, "Coffee maker"),
+                ])
+            else:
+                # Home appliances
+                spike = random.choice([
+                    (1800, "Cooking"),      # Stove/oven
+                    (2200, "Kettle"),       # Electric kettle
+                    (1500, "Dishwasher"),   # Dishwasher heating
+                    (2000, "Washing"),      # Washing machine heating
+                    (900, "Toaster"),       # Toaster
+                ])
             activity_load += spike[0]
             hh.activity = spike[1]
         else:
-            # Set activity based on time of day
-            if hour in (6, 7):
-                hh.activity = "Morning routine"
-            elif hour in (8, 9, 10) and is_weekend:
-                hh.activity = "Weekend breakfast"
-            elif 17 <= hour <= 19:
-                hh.activity = "Dinner preparation"
-            elif 20 <= hour <= 22:
-                hh.activity = "Evening entertainment"
-            elif hour >= 23 or hour < 6:
-                hh.activity = "Night (standby)"
+            # Set activity based on presence, building type, and time
+            if hh.presence_mode != "home":
+                if hh.building_type == "cabin":
+                    hh.activity = "Empty (frost protection)"
+                else:
+                    hh.activity = "Away (standby loads)"
+            elif hh.building_type == "cabin":
+                # Cabin activities
+                if hour in (6, 7, 8):
+                    hh.activity = "Cabin morning"
+                elif hour in (9, 10) and is_weekend:
+                    hh.activity = "Sauna warming"
+                elif 11 <= hour <= 13:
+                    hh.activity = "Lunch preparation"
+                elif 17 <= hour <= 19:
+                    hh.activity = "Dinner at cabin"
+                elif 20 <= hour <= 22:
+                    hh.activity = "Evening relaxation"
+                elif hour >= 23 or hour < 6:
+                    hh.activity = "Night (cabin)"
+                else:
+                    hh.activity = "Cabin activity"
             else:
-                hh.activity = "Normal activity"
+                # Home activities
+                if hour in (6, 7):
+                    hh.activity = "Morning routine"
+                elif hour in (8, 9, 10) and is_weekend:
+                    hh.activity = "Weekend breakfast"
+                elif 17 <= hour <= 19:
+                    hh.activity = "Dinner preparation"
+                elif 20 <= hour <= 22:
+                    hh.activity = "Evening entertainment"
+                elif hour >= 23 or hour < 6:
+                    hh.activity = "Night (standby)"
+                else:
+                    hh.activity = "Normal activity"
 
         # Total power = base load + activity load
-        hh.power_w = HOUSEHOLD_BASE_LOAD_W + activity_load
+        hh.power_w = base_load + activity_load
 
         # Accumulate energy
         hh.energy_kwh += (hh.power_w / 1000) * dt_hours
@@ -451,3 +525,73 @@ class SimulationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         self.water_heater.target_temp = max(40.0, min(75.0, temp))
         _LOGGER.info("Water heater target set to %.1f°C", self.water_heater.target_temp)
+
+    def set_presence_mode(self, mode: str) -> None:
+        """Set household presence mode.
+
+        Controls whether the household simulation behaves as occupied or empty.
+        This affects power consumption patterns significantly:
+        - "home": Full household activity patterns
+        - "away": Standby loads only (fridge, router, etc.)
+        - "vacation": Extended away mode
+
+        Args:
+            mode: Presence mode ("home", "away", "vacation")
+        """
+        if self.household is None:
+            _LOGGER.warning("Cannot set presence: household not enabled")
+            return
+
+        if mode not in self.household.PRESENCE_MODES:
+            _LOGGER.warning("Invalid presence mode: %s", mode)
+            return
+
+        old_mode = self.household.presence_mode
+        self.household.presence_mode = mode
+        _LOGGER.info(
+            "Presence mode changed: %s -> %s (building: %s)",
+            old_mode,
+            mode,
+            self.household.building_type,
+        )
+
+    def set_building_type(self, building_type: str) -> None:
+        """Set building type (home or cabin).
+
+        Controls the consumption patterns and base loads:
+        - "home": Primary residence with full appliances
+        - "cabin": Hytte/weekend cabin with different patterns
+
+        Args:
+            building_type: Building type ("home", "cabin")
+        """
+        if self.household is None:
+            _LOGGER.warning("Cannot set building type: household not enabled")
+            return
+
+        if building_type not in self.household.BUILDING_TYPES:
+            _LOGGER.warning("Invalid building type: %s", building_type)
+            return
+
+        old_type = self.household.building_type
+        self.household.building_type = building_type
+        _LOGGER.info("Building type changed: %s -> %s", old_type, building_type)
+
+    def set_occupants(self, count: int) -> None:
+        """Set the number of occupants.
+
+        Scales power consumption proportionally:
+        - 1 person: ~25% of baseline (4 people)
+        - 2 people: ~50% of baseline
+        - 4 people: 100% baseline
+        - 6 people: ~150% of baseline
+
+        Args:
+            count: Number of occupants (1-8)
+        """
+        if self.household is None:
+            _LOGGER.warning("Cannot set occupants: household not enabled")
+            return
+
+        self.household.occupants = max(1, min(8, count))
+        _LOGGER.info("Occupants set to %d", self.household.occupants)

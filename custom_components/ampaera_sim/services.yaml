@@ -56,3 +56,58 @@ set_current_limit:
           max: 32
           step: 1
           unit_of_measurement: A
+
+set_presence_mode:
+  name: Set Presence Mode
+  description: >-
+    Set the household presence mode. Controls power consumption patterns:
+    'home' for full activity, 'away' for standby loads, 'vacation' for extended absence.
+  fields:
+    mode:
+      name: Mode
+      description: Presence mode for the household.
+      required: true
+      selector:
+        select:
+          options:
+            - label: Home (family present)
+              value: home
+            - label: Away (at cabin)
+              value: away
+            - label: Vacation (extended absence)
+              value: vacation
+
+set_building_type:
+  name: Set Building Type
+  description: >-
+    Set the building type. 'home' for primary residence with full appliances,
+    'cabin' for weekend cabin (hytte) with different consumption patterns.
+  fields:
+    building_type:
+      name: Building Type
+      description: Type of building being simulated.
+      required: true
+      selector:
+        select:
+          options:
+            - label: Home (primary residence)
+              value: home
+            - label: Cabin (hytte)
+              value: cabin
+
+set_occupants:
+  name: Set Occupants
+  description: >-
+    Set the number of occupants. Scales power consumption proportionally
+    (4 occupants is baseline). Affects cooking, appliance usage, etc.
+  fields:
+    count:
+      name: Occupants
+      description: Number of people in the household.
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 8
+          step: 1
+          unit_of_measurement: people

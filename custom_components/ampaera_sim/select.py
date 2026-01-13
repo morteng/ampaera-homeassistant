@@ -14,9 +14,11 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     DEVICE_EV_CHARGER,
+    DEVICE_HOUSEHOLD,
     DEVICE_WATER_HEATER,
     DOMAIN,
     EV_CHARGER_MODEL,
+    HOUSEHOLD_MODEL,
     MANUFACTURER,
     WATER_HEATER_MODEL,
 )
@@ -45,6 +47,11 @@ async def async_setup_entry(
     # EV charger selects (status is read-only, shown as sensor instead)
     if DEVICE_EV_CHARGER in coordinator.devices:
         entities.append(EVChargerStatusSelect(coordinator))
+
+    # Household selects (presence mode, building type)
+    if DEVICE_HOUSEHOLD in coordinator.devices:
+        entities.append(HouseholdPresenceModeSelect(coordinator))
+        entities.append(HouseholdBuildingTypeSelect(coordinator))
 
     async_add_entities(entities)
 
@@ -159,4 +166,89 @@ class EVChargerStatusSelect(CoordinatorEntity, SelectEntity):
             ev.status = "Error"
             ev.is_charging = False
 
+        await self.coordinator.async_request_refresh()
+
+
+class HouseholdPresenceModeSelect(CoordinatorEntity, SelectEntity):
+    """Household presence mode select entity.
+
+    Controls whether the household is occupied:
+    - home: Family is present, full activity patterns
+    - away: Family is temporarily away (at cabin), standby loads only
+    - vacation: Extended absence, minimal loads
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Presence Mode"
+    _attr_options = ["home", "away", "vacation"]
+    _attr_icon = "mdi:home-account"
+
+    def __init__(self, coordinator: SimulationCoordinator) -> None:
+        """Initialize select entity."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{DOMAIN}_household_presence_mode"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info for device registry."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, "household")},
+            name="Simulated Household",
+            manufacturer=MANUFACTURER,
+            model=HOUSEHOLD_MODEL,
+            sw_version="1.0.0",
+        )
+
+    @property
+    def current_option(self) -> str | None:
+        """Return current presence mode."""
+        if self.coordinator.household:
+            return self.coordinator.household.presence_mode
+        return None
+
+    async def async_select_option(self, option: str) -> None:
+        """Select presence mode."""
+        self.coordinator.set_presence_mode(option)
+        await self.coordinator.async_request_refresh()
+
+
+class HouseholdBuildingTypeSelect(CoordinatorEntity, SelectEntity):
+    """Household building type select entity.
+
+    Controls the type of building being simulated:
+    - home: Primary residence with full appliances
+    - cabin: Weekend cabin (hytte) with different patterns
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Building Type"
+    _attr_options = ["home", "cabin"]
+    _attr_icon = "mdi:home-variant"
+
+    def __init__(self, coordinator: SimulationCoordinator) -> None:
+        """Initialize select entity."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{DOMAIN}_household_building_type"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info for device registry."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, "household")},
+            name="Simulated Household",
+            manufacturer=MANUFACTURER,
+            model=HOUSEHOLD_MODEL,
+            sw_version="1.0.0",
+        )
+
+    @property
+    def current_option(self) -> str | None:
+        """Return current building type."""
+        if self.coordinator.household:
+            return self.coordinator.household.building_type
+        return None
+
+    async def async_select_option(self, option: str) -> None:
+        """Select building type."""
+        self.coordinator.set_building_type(option)
         await self.coordinator.async_request_refresh()

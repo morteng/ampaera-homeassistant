@@ -62,6 +62,36 @@
           "description": "Maximum charging current in amps."
         }
       }
+    },
+    "set_presence_mode": {
+      "name": "Set Presence Mode",
+      "description": "Set the household presence mode. Controls power consumption patterns.",
+      "fields": {
+        "mode": {
+          "name": "Mode",
+          "description": "Presence mode: 'home' (family present), 'away' (at cabin), 'vacation' (extended absence)."
+        }
+      }
+    },
+    "set_building_type": {
+      "name": "Set Building Type",
+      "description": "Set the building type for different consumption patterns.",
+      "fields": {
+        "building_type": {
+          "name": "Building Type",
+          "description": "Building type: 'home' (primary residence) or 'cabin' (hytte)."
+        }
+      }
+    },
+    "set_occupants": {
+      "name": "Set Occupants",
+      "description": "Set the number of occupants. Scales power consumption proportionally.",
+      "fields": {
+        "count": {
+          "name": "Occupants",
+          "description": "Number of people in the household (1-8)."
+        }
+      }
     }
   }
 }

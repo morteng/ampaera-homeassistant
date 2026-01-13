@@ -32,6 +32,9 @@ SERVICE_DISCONNECT_EV = "disconnect_ev"
 SERVICE_START_CHARGING = "start_charging"
 SERVICE_STOP_CHARGING = "stop_charging"
 SERVICE_SET_CURRENT_LIMIT = "set_current_limit"
+SERVICE_SET_PRESENCE_MODE = "set_presence_mode"
+SERVICE_SET_BUILDING_TYPE = "set_building_type"
+SERVICE_SET_OCCUPANTS = "set_occupants"
 
 # Service schemas
 SIMULATE_SHOWER_SCHEMA = vol.Schema(
@@ -54,6 +57,26 @@ SET_CURRENT_LIMIT_SCHEMA = vol.Schema(
     {
         vol.Required("current"): vol.All(
             vol.Coerce(int), vol.Range(min=6, max=32)
+        ),
+    }
+)
+
+SET_PRESENCE_MODE_SCHEMA = vol.Schema(
+    {
+        vol.Required("mode"): vol.In(["home", "away", "vacation"]),
+    }
+)
+
+SET_BUILDING_TYPE_SCHEMA = vol.Schema(
+    {
+        vol.Required("building_type"): vol.In(["home", "cabin"]),
+    }
+)
+
+SET_OCCUPANTS_SCHEMA = vol.Schema(
+    {
+        vol.Required("count"): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=8)
         ),
     }
 )
@@ -134,6 +157,36 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             coordinator.set_ev_current_limit(current)
             await coordinator.async_request_refresh()
 
+    async def handle_set_presence_mode(call: ServiceCall) -> None:
+        """Handle set_presence_mode service call."""
+        mode = call.data["mode"]
+        _LOGGER.info("Setting presence mode to: %s", mode)
+
+        coordinator = _get_coordinator(hass)
+        if coordinator:
+            coordinator.set_presence_mode(mode)
+            await coordinator.async_request_refresh()
+
+    async def handle_set_building_type(call: ServiceCall) -> None:
+        """Handle set_building_type service call."""
+        building_type = call.data["building_type"]
+        _LOGGER.info("Setting building type to: %s", building_type)
+
+        coordinator = _get_coordinator(hass)
+        if coordinator:
+            coordinator.set_building_type(building_type)
+            await coordinator.async_request_refresh()
+
+    async def handle_set_occupants(call: ServiceCall) -> None:
+        """Handle set_occupants service call."""
+        count = call.data["count"]
+        _LOGGER.info("Setting occupants to: %d", count)
+
+        coordinator = _get_coordinator(hass)
+        if coordinator:
+            coordinator.set_occupants(count)
+            await coordinator.async_request_refresh()
+
     # Register all services
     hass.services.async_register(
         DOMAIN, SERVICE_SIMULATE_SHOWER, handle_simulate_shower, schema=SIMULATE_SHOWER_SCHEMA
@@ -146,6 +199,15 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, SERVICE_STOP_CHARGING, handle_stop_charging)
     hass.services.async_register(
         DOMAIN, SERVICE_SET_CURRENT_LIMIT, handle_set_current_limit, schema=SET_CURRENT_LIMIT_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_SET_PRESENCE_MODE, handle_set_presence_mode, schema=SET_PRESENCE_MODE_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_SET_BUILDING_TYPE, handle_set_building_type, schema=SET_BUILDING_TYPE_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_SET_OCCUPANTS, handle_set_occupants, schema=SET_OCCUPANTS_SCHEMA
     )
 
     _LOGGER.info("Ampæra Simulation services registered")
@@ -164,6 +226,9 @@ async def async_unload_services(hass: HomeAssistant) -> None:
         SERVICE_START_CHARGING,
         SERVICE_STOP_CHARGING,
         SERVICE_SET_CURRENT_LIMIT,
+        SERVICE_SET_PRESENCE_MODE,
+        SERVICE_SET_BUILDING_TYPE,
+        SERVICE_SET_OCCUPANTS,
     ]
 
     for service in services_to_remove:

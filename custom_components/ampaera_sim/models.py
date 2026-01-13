@@ -96,6 +96,8 @@ class HouseholdState:
     Load varies by:
     - Time of day (morning/evening peaks)
     - Day of week (weekday vs weekend patterns)
+    - Presence mode (home, away, vacation)
+    - Building type (home, cabin)
     - Random variations for realism
     """
 
@@ -103,3 +105,18 @@ class HouseholdState:
     energy_kwh: float = 0.0
     # Current activity description for display
     activity: str = "Idle"
+    # Presence mode: "home" (family present), "away" (temporarily out), "vacation" (long-term away)
+    presence_mode: str = "home"
+    # Building type: "home" (primary residence) or "cabin" (hytte - weekend/holiday use)
+    building_type: str = "home"
+    # Number of occupants (affects load scaling)
+    occupants: int = 4
+
+    # Presence mode options
+    PRESENCE_MODES: list[str] = field(
+        default_factory=lambda: ["home", "away", "vacation"]
+    )
+    # Building type options
+    BUILDING_TYPES: list[str] = field(
+        default_factory=lambda: ["home", "cabin"]
+    )

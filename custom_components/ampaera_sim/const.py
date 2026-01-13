@@ -78,5 +78,99 @@ HOUSEHOLD_PATTERNS = {
     23: (200, 300),   # Going to bed
 }
 
+# Home patterns when family is AWAY (at cabin)
+# Only standby loads: fridge, freezer, router, standby devices, frost protection
+HOME_AWAY_PATTERNS = {
+    # Hour: (weekday_load, weekend_load) - minimal variation
+    0: (50, 50),
+    1: (50, 50),
+    2: (50, 50),
+    3: (50, 50),
+    4: (50, 50),
+    5: (50, 50),
+    6: (50, 50),
+    7: (50, 50),
+    8: (50, 50),
+    9: (50, 50),
+    10: (50, 50),
+    11: (50, 50),
+    12: (50, 50),
+    13: (50, 50),
+    14: (50, 50),
+    15: (50, 50),
+    16: (50, 50),
+    17: (50, 50),
+    18: (50, 50),
+    19: (50, 50),
+    20: (50, 50),
+    21: (50, 50),
+    22: (50, 50),
+    23: (50, 50),
+}
+
+# Cabin (hytte) patterns when EMPTY - frost protection only
+CABIN_EMPTY_PATTERNS = {
+    # Hour: (weekday_load, weekend_load) - just frost protection, minimal standby
+    0: (20, 20),
+    1: (20, 20),
+    2: (20, 20),
+    3: (20, 20),
+    4: (20, 20),
+    5: (20, 20),
+    6: (20, 20),
+    7: (20, 20),
+    8: (20, 20),
+    9: (20, 20),
+    10: (20, 20),
+    11: (20, 20),
+    12: (20, 20),
+    13: (20, 20),
+    14: (20, 20),
+    15: (20, 20),
+    16: (20, 20),
+    17: (20, 20),
+    18: (20, 20),
+    19: (20, 20),
+    20: (20, 20),
+    21: (20, 20),
+    22: (20, 20),
+    23: (20, 20),
+}
+
+# Cabin (hytte) patterns when OCCUPIED - weekend visit style
+# Norwegian cabin visits: arrive Friday evening, leave Sunday afternoon
+CABIN_OCCUPIED_PATTERNS = {
+    # Hour: (weekday_load, weekend_load)
+    0: (100, 150),    # Night - wood stove supplements
+    1: (50, 100),
+    2: (50, 50),
+    3: (50, 50),
+    4: (50, 50),
+    5: (50, 50),
+    6: (50, 100),     # Sleep in at cabin
+    7: (100, 200),
+    8: (200, 500),    # Wake up, breakfast
+    9: (300, 800),    # Coffee, breakfast, sauna heating
+    10: (400, 700),   # Activities
+    11: (300, 900),   # Lunch prep
+    12: (500, 1200),  # Lunch - more cooking at cabin
+    13: (300, 600),   # Relax after lunch
+    14: (300, 500),   # Afternoon activities
+    15: (400, 600),
+    16: (500, 800),   # Afternoon fika/coffee
+    17: (800, 1200),  # Dinner prep - cabin cooking
+    18: (1200, 1500), # Dinner
+    19: (800, 1000),  # Evening activities
+    20: (600, 800),   # Sauna, relaxation
+    21: (500, 700),   # Wind down
+    22: (300, 500),   # Preparing for bed
+    23: (200, 300),
+}
+
+# Base load by building type (fridge, always-on devices)
+HOUSEHOLD_BASE_LOAD_HOME_W = 250.0   # Primary home: fridge, freezer, router, standby
+HOUSEHOLD_BASE_LOAD_CABIN_W = 80.0   # Cabin: small fridge only when occupied
+HOUSEHOLD_BASE_LOAD_CABIN_EMPTY_W = 30.0  # Cabin empty: frost protection circuit only
+
 # Simulation timing
 UPDATE_INTERVAL_SECONDS = 10

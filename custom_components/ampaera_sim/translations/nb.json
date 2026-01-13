@@ -62,6 +62,36 @@
           "description": "Maksimal ladestrøm i ampere."
         }
       }
+    },
+    "set_presence_mode": {
+      "name": "Sett Tilstedeværelsesmodus",
+      "description": "Sett husholdningens tilstedeværelsesmodus. Styrer strømforbruksmønstre.",
+      "fields": {
+        "mode": {
+          "name": "Modus",
+          "description": "Tilstedeværelsesmodus: 'home' (familien hjemme), 'away' (på hytta), 'vacation' (ferie)."
+        }
+      }
+    },
+    "set_building_type": {
+      "name": "Sett Bygningstype",
+      "description": "Sett bygningstype for forskjellige forbruksmønstre.",
+      "fields": {
+        "building_type": {
+          "name": "Bygningstype",
+          "description": "Bygningstype: 'home' (bolig) eller 'cabin' (hytte)."
+        }
+      }
+    },
+    "set_occupants": {
+      "name": "Sett Antall Beboere",
+      "description": "Sett antall beboere. Skalerer strømforbruket proporsjonalt.",
+      "fields": {
+        "count": {
+          "name": "Beboere",
+          "description": "Antall personer i husholdningen (1-8)."
+        }
+      }
     }
   }
 }
