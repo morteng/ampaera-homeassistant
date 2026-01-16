@@ -22,7 +22,6 @@ from typing import Any
 import voluptuous as vol
 from homeassistant.config_entries import (
     ConfigEntry,
-    ConfigFlow,
     OptionsFlow,
 )
 from homeassistant.helpers.config_entry_oauth2_flow import (
@@ -51,6 +50,7 @@ from .api import (
     AmperaAuthError,
     AmperaConnectionError,
 )
+from .application_credentials import AmperaOAuth2Implementation
 from .const import (
     AUTH_METHOD_API_KEY,
     AUTH_METHOD_OAUTH,
@@ -83,11 +83,9 @@ from .const import (
     INSTALLATION_MODE_REAL,
     INSTALLATION_MODE_SIMULATION,
     INSTALLATION_MODES,
-    OAUTH_CLIENT_ID,
     SIMULATION_PROFILES,
     SIMULATION_WH_TYPES,
 )
-from .application_credentials import AmperaOAuth2Implementation
 from .device_discovery import AmperaDeviceDiscovery
 
 _LOGGER = logging.getLogger(__name__)

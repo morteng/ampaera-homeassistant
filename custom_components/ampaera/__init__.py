@@ -18,6 +18,7 @@ https://github.com/morteng/ampaera-homeassistant
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -29,6 +30,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.config_entry_oauth2_flow import async_register_implementation
 
 from .api import AmperaApiClient, AmperaAuthError, AmperaConnectionError
+from .application_credentials import AmperaOAuth2Implementation
 from .command_service import AmperaCommandService
 from .const import (
     AUTH_METHOD_API_KEY,
@@ -58,12 +60,11 @@ from .event_service import AmperaEventService
 from .push_service import AmperaTelemetryPushService, EntityMapping
 from .services import async_setup_services as async_setup_simulation_services
 from .services import async_unload_services as async_unload_simulation_services
-from .application_credentials import AmperaOAuth2Implementation
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
     """Set up the Ampæra integration.
 
     This is called once when the integration is first loaded.
@@ -427,14 +428,24 @@ async def _async_setup_simulation_integration(hass: HomeAssistant, entry: Config
 
 
 async def _async_setup_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Auto-create Lovelace dashboard from template.
+    """Auto-create and register Lovelace dashboard.
 
-    Creates a ready-to-use dashboard YAML in the user's dashboards directory
-    and notifies them about it.
+    Creates a dashboard and registers it with Home Assistant so it appears
+    in the sidebar automatically - no manual setup required.
+
+    This works by directly adding to the lovelace_dashboards storage file,
+    which is how HA's UI creates dashboards internally.
     """
+    import json
+
+    import yaml
+
     site_id = entry.data[CONF_SITE_ID]
     site_name = entry.data.get(CONF_SITE_NAME, "Home")
     grid_region = entry.data.get(CONF_GRID_REGION, "NO1")
+
+    # Dashboard URL path (must contain hyphen for HA requirement)
+    url_path = f"ampaera-{site_id[:8]}"
 
     # Load dashboard template
     template_path = Path(__file__).parent / "dashboards" / "ampaera_dashboard.yaml"
@@ -443,49 +454,137 @@ async def _async_setup_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> Non
         return
 
     try:
-        template = template_path.read_text(encoding="utf-8")
-
-        # Substitute placeholders
-        dashboard_content = (
+        # Read template and substitute placeholders (use executor for file I/O)
+        template = await hass.async_add_executor_job(
+            template_path.read_text, "utf-8"
+        )
+        dashboard_yaml = (
             template.replace("{site_id}", site_id)
             .replace("{site_name}", site_name)
             .replace("{grid_region}", grid_region)
         )
 
-        # Create dashboards directory if needed
-        dashboards_dir = Path(hass.config.path("dashboards"))
-        dashboards_dir.mkdir(exist_ok=True)
+        # Parse YAML to get dashboard config
+        dashboard_config = yaml.safe_load(dashboard_yaml)
 
-        # Write dashboard file (use first 8 chars of site_id for filename)
-        dashboard_file = dashboards_dir / f"ampaera_{site_id[:8]}.yaml"
+        # Storage file paths
+        storage_dir = Path(hass.config.path(".storage"))
+        dashboards_file = storage_dir / "lovelace_dashboards"
+        dashboard_config_file = storage_dir / f"lovelace.{url_path}"
 
-        # Only create if it doesn't already exist (don't overwrite user customizations)
-        if not dashboard_file.exists():
-            dashboard_file.write_text(dashboard_content, encoding="utf-8")
-            _LOGGER.info("Created Ampæra dashboard at %s", dashboard_file)
+        # Read existing dashboards storage
+        dashboards_data = {"version": 1, "minor_version": 1, "key": "lovelace_dashboards", "data": {"items": []}}
+        if dashboards_file.exists():
+            content = await hass.async_add_executor_job(dashboards_file.read_text, "utf-8")
+            dashboards_data = json.loads(content)
 
-            # Notify user
-            persistent_notification.async_create(
-                hass,
-                (
-                    f"Your Ampæra Energy dashboard for **{site_name}** is ready!\n\n"
-                    "To enable it:\n"
-                    "1. Go to **Settings** → **Dashboards**\n"
-                    "2. Click **Add Dashboard**\n"
-                    "3. Select **Use existing YAML file**\n"
-                    f"4. Enter path: `dashboards/ampaera_{site_id[:8]}.yaml`\n\n"
-                    "The dashboard includes real-time power, energy graphs, "
-                    "device controls, and spot prices."
-                ),
-                title="Ampæra Dashboard Created",
-                notification_id=f"ampaera_dashboard_{site_id[:8]}",
-            )
-        else:
-            _LOGGER.debug("Dashboard already exists at %s, skipping", dashboard_file)
+        # Check if dashboard already exists
+        existing_ids = [item.get("url_path") for item in dashboards_data["data"]["items"]]
+        if url_path in existing_ids:
+            _LOGGER.debug("Dashboard %s already registered, skipping", url_path)
+            return
+
+        # Add new dashboard entry
+        new_dashboard = {
+            "id": url_path,
+            "icon": "mdi:lightning-bolt",
+            "title": f"Ampæra - {site_name}",
+            "url_path": url_path,
+            "mode": "storage",
+            "show_in_sidebar": True,
+            "require_admin": False,
+        }
+        dashboards_data["data"]["items"].append(new_dashboard)
+
+        # Write updated dashboards list
+        await hass.async_add_executor_job(
+            dashboards_file.write_text,
+            json.dumps(dashboards_data, indent=2),
+            "utf-8",
+        )
+        _LOGGER.info("Registered Ampæra dashboard in lovelace_dashboards")
+
+        # Write dashboard configuration
+        config_data = {
+            "version": 1,
+            "minor_version": 1,
+            "key": f"lovelace.{url_path}",
+            "data": {"config": dashboard_config},
+        }
+        await hass.async_add_executor_job(
+            dashboard_config_file.write_text,
+            json.dumps(config_data, indent=2),
+            "utf-8",
+        )
+        _LOGGER.info("Saved dashboard configuration to %s", dashboard_config_file)
+
+        # Notify user - dashboard will appear after HA restart
+        persistent_notification.async_create(
+            hass,
+            (
+                f"Your Ampæra Energy dashboard for **{site_name}** has been created!\n\n"
+                "**Restart Home Assistant** to see it in the sidebar.\n\n"
+                f"After restart, find it as **Ampæra - {site_name}** "
+                f"or navigate to `/lovelace/{url_path}`.\n\n"
+                "The dashboard includes real-time power, energy graphs, "
+                "device controls, and spot prices."
+            ),
+            title="Ampæra Dashboard Created - Restart Required",
+            notification_id=f"ampaera_dashboard_{site_id[:8]}",
+        )
 
     except Exception as err:
         _LOGGER.error("Failed to create dashboard: %s", err)
-        # Don't fail the integration setup for dashboard issues
+        # Fall back to YAML file creation
+        with contextlib.suppress(Exception):
+            await _async_setup_dashboard_yaml_fallback(hass, entry, None)
+
+
+async def _async_setup_dashboard_yaml_fallback(
+    hass: HomeAssistant, entry: ConfigEntry, dashboard_yaml: str | None
+) -> None:
+    """Fallback: Create dashboard YAML file and notify user to add manually."""
+    site_id = entry.data[CONF_SITE_ID]
+    site_name = entry.data.get(CONF_SITE_NAME, "Home")
+    grid_region = entry.data.get(CONF_GRID_REGION, "NO1")
+
+    if dashboard_yaml is None:
+        template_path = Path(__file__).parent / "dashboards" / "ampaera_dashboard.yaml"
+        template = await hass.async_add_executor_job(template_path.read_text, "utf-8")
+        dashboard_yaml = (
+            template.replace("{site_id}", site_id)
+            .replace("{site_name}", site_name)
+            .replace("{grid_region}", grid_region)
+        )
+
+    # Create dashboards directory if needed
+    dashboards_dir = Path(hass.config.path("dashboards"))
+    await hass.async_add_executor_job(dashboards_dir.mkdir, True, True)
+
+    # Write dashboard file
+    dashboard_file = dashboards_dir / f"ampaera_{site_id[:8]}.yaml"
+
+    if not dashboard_file.exists():
+        await hass.async_add_executor_job(
+            dashboard_file.write_text, dashboard_yaml, "utf-8"
+        )
+        _LOGGER.info("Created Ampæra dashboard YAML at %s", dashboard_file)
+
+        persistent_notification.async_create(
+            hass,
+            (
+                f"Your Ampæra Energy dashboard for **{site_name}** is ready!\n\n"
+                "To enable it:\n"
+                "1. Go to **Settings** → **Dashboards**\n"
+                "2. Click **Add Dashboard**\n"
+                "3. Select **Use existing YAML file**\n"
+                f"4. Enter path: `dashboards/ampaera_{site_id[:8]}.yaml`\n\n"
+                "The dashboard includes real-time power, energy graphs, "
+                "device controls, and spot prices."
+            ),
+            title="Ampæra Dashboard Created",
+            notification_id=f"ampaera_dashboard_{site_id[:8]}",
+        )
 
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:

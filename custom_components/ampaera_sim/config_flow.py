@@ -15,7 +15,6 @@ from .const import (
     CONF_DEVICES,
     DEVICE_AMS_METER,
     DEVICE_EV_CHARGER,
-    DEVICE_HOUSEHOLD,
     DEVICE_WATER_HEATER,
     DOMAIN,
 )
@@ -57,12 +56,11 @@ class AmperaSimConfigFlow(ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(
                         CONF_DEVICES,
-                        default=[DEVICE_WATER_HEATER, DEVICE_EV_CHARGER, DEVICE_HOUSEHOLD, DEVICE_AMS_METER],
+                        default=[DEVICE_WATER_HEATER, DEVICE_EV_CHARGER, DEVICE_AMS_METER],
                     ): cv.multi_select(
                         {
                             DEVICE_WATER_HEATER: "Water Heater (200L, 2kW)",
                             DEVICE_EV_CHARGER: "EV Charger (32A, Single-phase)",
-                            DEVICE_HOUSEHOLD: "Household Load (Appliances, Lights, etc.)",
                             DEVICE_AMS_METER: "AMS Power Meter (3-phase)",
                         }
                     ),
@@ -86,7 +84,7 @@ class AmperaSimConfigFlow(ConfigFlow, domain=DOMAIN):
         # Use provided devices or default to all
         devices = (import_data or {}).get(
             CONF_DEVICES,
-            [DEVICE_WATER_HEATER, DEVICE_EV_CHARGER, DEVICE_HOUSEHOLD, DEVICE_AMS_METER],
+            [DEVICE_WATER_HEATER, DEVICE_EV_CHARGER, DEVICE_AMS_METER],
         )
 
         return self.async_create_entry(
@@ -125,7 +123,6 @@ class AmperaSimConfigFlow(ConfigFlow, domain=DOMAIN):
                         {
                             DEVICE_WATER_HEATER: "Water Heater (200L, 2kW)",
                             DEVICE_EV_CHARGER: "EV Charger (32A, Single-phase)",
-                            DEVICE_HOUSEHOLD: "Household Load (Appliances, Lights, etc.)",
                             DEVICE_AMS_METER: "AMS Power Meter (3-phase)",
                         }
                     ),

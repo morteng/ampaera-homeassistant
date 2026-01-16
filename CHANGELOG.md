@@ -5,6 +5,32 @@ All notable changes to the Ampæra Home Assistant integration.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-01-16
+
+### Added
+- **OAuth2 Authentication**: Support for OAuth2 authorization code flow with PKCE
+  - Multi-instance OAuth with direct callbacks per entry
+  - Pre-registered Home Assistant OAuth client (no manual credentials needed)
+  - Secure token refresh handling
+- **Auto-Dashboard**: Automatic dashboard creation for Ampæra devices on first setup
+- **Open Source**: Released under MIT license for community contributions
+- **ampaera_sim Enhancements**:
+  - Presence-based household simulation patterns
+  - Household status sensors for monitoring simulation state
+  - Support for building_type and presence_mode configuration options
+
+### Fixed
+- OAuth flow tests and pre-registered HA client configuration
+- ampaera_sim config flow tests for better validation
+- Import sorting and lint issues
+
+### Changed
+- Lint fixes for ruff compliance (contextlib.suppress, unused arguments)
+
+### Compatibility
+- Home Assistant: 2024.1.0+
+- Ampæra API: v0.28.0+
+
 ## [1.1.0] - 2026-01-06
 
 ### Added

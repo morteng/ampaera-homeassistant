@@ -22,7 +22,6 @@ from .const import (
     CABIN_OCCUPIED_PATTERNS,
     DEVICE_AMS_METER,
     DEVICE_EV_CHARGER,
-    DEVICE_HOUSEHOLD,
     DEVICE_WATER_HEATER,
     DOMAIN,
     EV_CHARGER_EFFICIENCY,
@@ -88,8 +87,11 @@ class SimulationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.power_meter: PowerMeterState | None = (
             PowerMeterState() if DEVICE_AMS_METER in devices else None
         )
+        # Household is always created internally when AMS meter is enabled.
+        # It provides realistic background load but is NOT exposed as a HA device.
+        # Its power consumption is included in the AMS meter's total reading.
         self.household: HouseholdState | None = (
-            HouseholdState() if DEVICE_HOUSEHOLD in devices else None
+            HouseholdState() if DEVICE_AMS_METER in devices else None
         )
 
         # Apply options to household if configured

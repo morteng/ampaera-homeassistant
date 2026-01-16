@@ -5,9 +5,9 @@
 <h1 align="center">Ampæra Energy - Home Assistant Integration</h1>
 
 <p align="center">
-  <a href="https://github.com/hacs/integration"><img src="https://img.shields.io/badge/HACS-Default-41BDF5.svg" alt="HACS"></a>
   <a href="https://github.com/morteng/ampaera-homeassistant/releases"><img src="https://img.shields.io/github/release/morteng/ampaera-homeassistant.svg" alt="GitHub Release"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License: Apache 2.0"></a>
+  <img src="https://img.shields.io/badge/HACS-Pending-yellow.svg" alt="HACS Pending">
 </p>
 
 <p align="center">
@@ -35,18 +35,35 @@
 
 ## Installation
 
-### Step 1: Install via HACS
+### Manual Installation (Current Method)
 
+> **Note**: We're awaiting acceptance into the HACS default repository. For now, manual installation is required.
+
+**Quick Install:**
+
+1. Download the [latest release](https://github.com/morteng/ampaera-homeassistant/releases) (`ampaera.zip`)
+2. Extract and copy the `ampaera` folder to your Home Assistant `config/custom_components/` directory
+3. Restart Home Assistant (Settings → System → Restart)
+
+**Your folder structure should look like:**
+```
+config/
+└── custom_components/
+    └── ampaera/
+        ├── __init__.py
+        ├── manifest.json
+        └── ... (other files)
+```
+
+For detailed instructions, alternative installation methods, and troubleshooting, see the **[Full Installation Guide](docs/INSTALLATION.md)**.
+
+### HACS Installation (Coming Soon)
+
+Once accepted into HACS:
 1. Open **HACS** in Home Assistant
-2. Click **Integrations** tab
-3. Click the **+ Explore & Download Repositories** button
-4. Search for **"Ampæra Energy"**
-5. Click on the integration, then click **Download**
-6. **Restart Home Assistant** (Settings → System → Restart)
-
-> **Alternative: Manual Installation**
->
-> Download the [latest release](https://github.com/morteng/ampaera-homeassistant/releases), extract `custom_components/ampaera` to your Home Assistant `config/custom_components/` directory, and restart.
+2. Click **Integrations** → **+ Explore & Download Repositories**
+3. Search for **"Ampæra Energy"**
+4. Click **Download** and restart Home Assistant
 
 ### Step 2: Add the Integration
 

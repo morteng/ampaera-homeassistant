@@ -28,11 +28,9 @@ from .const import (
     AMS_METER_MODEL,
     DEVICE_AMS_METER,
     DEVICE_EV_CHARGER,
-    DEVICE_HOUSEHOLD,
     DEVICE_WATER_HEATER,
     DOMAIN,
     EV_CHARGER_MODEL,
-    HOUSEHOLD_MODEL,
     MANUFACTURER,
     WATER_HEATER_MODEL,
 )
@@ -84,16 +82,9 @@ async def async_setup_entry(
             PowerMeterEnergyImportSensor(coordinator),
         ])
 
-    # Household sensors
-    if DEVICE_HOUSEHOLD in coordinator.devices:
-        entities.extend([
-            HouseholdPowerSensor(coordinator),
-            HouseholdEnergySensor(coordinator),
-            HouseholdActivitySensor(coordinator),
-            HouseholdPresenceModeSensor(coordinator),
-            HouseholdBuildingTypeSensor(coordinator),
-            HouseholdOccupantsSensor(coordinator),
-        ])
+    # Note: Household simulation runs internally to provide realistic background
+    # load for the AMS meter, but is NOT exposed as a separate HA device.
+    # Its power consumption is included in the AMS meter's total reading.
 
     async_add_entities(entities)
 
@@ -491,146 +482,3 @@ class PowerMeterEnergyImportSensor(PowerMeterBaseSensor):
         return None
 
 
-# =============================================================================
-# Household Sensors
-# =============================================================================
-
-
-class HouseholdBaseSensor(CoordinatorEntity, SensorEntity):
-    """Base class for household sensors."""
-
-    _attr_has_entity_name = True
-
-    def __init__(self, coordinator: SimulationCoordinator) -> None:
-        """Initialize sensor."""
-        super().__init__(coordinator)
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info for device registry."""
-        return DeviceInfo(
-            identifiers={(DOMAIN, "household")},
-            name="Simulated Household",
-            manufacturer=MANUFACTURER,
-            model=HOUSEHOLD_MODEL,
-            sw_version="1.0.0",
-        )
-
-
-class HouseholdPowerSensor(HouseholdBaseSensor):
-    """Household power consumption sensor."""
-
-    _attr_name = "Power"
-    _attr_device_class = SensorDeviceClass.POWER
-    _attr_native_unit_of_measurement = UnitOfPower.WATT
-    _attr_state_class = SensorStateClass.MEASUREMENT
-
-    def __init__(self, coordinator: SimulationCoordinator) -> None:
-        """Initialize sensor."""
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{DOMAIN}_household_power"
-
-    @property
-    def native_value(self) -> float | None:
-        """Return current power."""
-        if self.coordinator.household:
-            return round(self.coordinator.household.power_w, 0)
-        return None
-
-
-class HouseholdEnergySensor(HouseholdBaseSensor):
-    """Household cumulative energy sensor."""
-
-    _attr_name = "Energy"
-    _attr_device_class = SensorDeviceClass.ENERGY
-    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
-
-    def __init__(self, coordinator: SimulationCoordinator) -> None:
-        """Initialize sensor."""
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{DOMAIN}_household_energy"
-
-    @property
-    def native_value(self) -> float | None:
-        """Return cumulative energy."""
-        if self.coordinator.household:
-            return round(self.coordinator.household.energy_kwh, 2)
-        return None
-
-
-class HouseholdActivitySensor(HouseholdBaseSensor):
-    """Household current activity sensor."""
-
-    _attr_name = "Activity"
-    _attr_icon = "mdi:home-automation"
-
-    def __init__(self, coordinator: SimulationCoordinator) -> None:
-        """Initialize sensor."""
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{DOMAIN}_household_activity"
-
-    @property
-    def native_value(self) -> str | None:
-        """Return current activity."""
-        if self.coordinator.household:
-            return self.coordinator.household.activity
-        return None
-
-
-class HouseholdPresenceModeSensor(HouseholdBaseSensor):
-    """Household presence mode sensor (read-only mirror of select)."""
-
-    _attr_name = "Presence Mode Status"
-    _attr_icon = "mdi:home-account"
-
-    def __init__(self, coordinator: SimulationCoordinator) -> None:
-        """Initialize sensor."""
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{DOMAIN}_household_presence_mode_status"
-
-    @property
-    def native_value(self) -> str | None:
-        """Return current presence mode."""
-        if self.coordinator.household:
-            return self.coordinator.household.presence_mode
-        return None
-
-
-class HouseholdBuildingTypeSensor(HouseholdBaseSensor):
-    """Household building type sensor (read-only mirror of select)."""
-
-    _attr_name = "Building Type Status"
-    _attr_icon = "mdi:home-variant"
-
-    def __init__(self, coordinator: SimulationCoordinator) -> None:
-        """Initialize sensor."""
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{DOMAIN}_household_building_type_status"
-
-    @property
-    def native_value(self) -> str | None:
-        """Return current building type."""
-        if self.coordinator.household:
-            return self.coordinator.household.building_type
-        return None
-
-
-class HouseholdOccupantsSensor(HouseholdBaseSensor):
-    """Household occupants count sensor."""
-
-    _attr_name = "Occupants"
-    _attr_icon = "mdi:account-group"
-    _attr_state_class = SensorStateClass.MEASUREMENT
-
-    def __init__(self, coordinator: SimulationCoordinator) -> None:
-        """Initialize sensor."""
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{DOMAIN}_household_occupants"
-
-    @property
-    def native_value(self) -> int | None:
-        """Return current occupants count."""
-        if self.coordinator.household:
-            return self.coordinator.household.occupants
-        return None
