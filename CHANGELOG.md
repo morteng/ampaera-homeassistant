@@ -5,6 +5,25 @@ All notable changes to the Ampæra Home Assistant integration.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-01-17
+
+### Added
+- **Icon Translations (icons.json)**: Added HA 2024.2+ compliant icon definitions
+  - State-based icons for water heater modes (comfort, eco, boost, off)
+  - State-based icons for binary sensors (connected, charging)
+  - Service icons for force_sync, push_telemetry, send_command
+  - Default icons for all sensor types (power, energy, cost, voltage, current)
+
+### Changed
+- **ampaera_sim**: Household simulation is now internal-only
+  - Household power consumption is aggregated into AMS meter readings
+  - No longer exposes separate "Simulated Household" device/entities
+  - Provides more realistic simulation without cluttering device list
+
+### Compatibility
+- Home Assistant: 2024.1.0+
+- Ampæra API: v0.29.0+
+
 ## [1.2.0] - 2026-01-16
 
 ### Added

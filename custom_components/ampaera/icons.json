@@ -1,0 +1,77 @@
+{
+  "entity": {
+    "sensor": {
+      "power": {
+        "default": "mdi:flash"
+      },
+      "energy_today": {
+        "default": "mdi:lightning-bolt"
+      },
+      "cost_today": {
+        "default": "mdi:currency-usd"
+      },
+      "spot_price": {
+        "default": "mdi:chart-line"
+      },
+      "voltage_l1": {
+        "default": "mdi:sine-wave"
+      },
+      "voltage_l2": {
+        "default": "mdi:sine-wave"
+      },
+      "voltage_l3": {
+        "default": "mdi:sine-wave"
+      },
+      "current_l1": {
+        "default": "mdi:current-ac"
+      },
+      "current_l2": {
+        "default": "mdi:current-ac"
+      },
+      "current_l3": {
+        "default": "mdi:current-ac"
+      }
+    },
+    "binary_sensor": {
+      "connected": {
+        "default": "mdi:connection",
+        "state": {
+          "on": "mdi:check-network",
+          "off": "mdi:close-network"
+        }
+      },
+      "charging": {
+        "default": "mdi:ev-station",
+        "state": {
+          "on": "mdi:battery-charging",
+          "off": "mdi:battery"
+        }
+      }
+    },
+    "switch": {
+      "power": {
+        "default": "mdi:power",
+        "state": {
+          "on": "mdi:power",
+          "off": "mdi:power-off"
+        }
+      }
+    },
+    "water_heater": {
+      "water_heater": {
+        "default": "mdi:water-boiler",
+        "state": {
+          "comfort": "mdi:fire",
+          "eco": "mdi:leaf",
+          "boost": "mdi:lightning-bolt",
+          "off": "mdi:power-off"
+        }
+      }
+    }
+  },
+  "services": {
+    "force_sync": "mdi:sync",
+    "push_telemetry": "mdi:cloud-upload",
+    "send_command": "mdi:console"
+  }
+}
