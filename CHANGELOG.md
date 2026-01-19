@@ -5,6 +5,29 @@ All notable changes to the Ampæra Home Assistant integration.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-01-19
+
+### Added
+- **Simulation Dashboard Template**: New dedicated dashboard for simulation mode
+  - Uses correct entity IDs (`sensor.simulated_ams_meter_*`, `sensor.simulated_water_heater_*`, etc.)
+  - Automatically selected when installation mode is "Simulation"
+  - Includes all simulation devices: AMS meter, water heater, EV charger
+
+### Changed
+- **Dashboard Localization**: Converted dashboards to Norwegian language
+  - "Overview" → "Oversikt", "Energy" → "Energi", "Devices" → "Enheter"
+  - All labels and titles now in Norwegian
+- **Entity ID Generation**: Dashboard templates now use `{site_name_slug}` for proper HA entity ID matching
+- **Improved Notifications**: Better user guidance for dashboard creation and restart requirements
+
+### Fixed
+- Simulation mode dashboard now correctly displays simulated device data
+- Entity references match HA's slugified naming convention
+
+### Compatibility
+- Home Assistant: 2024.1.0+
+- Ampæra API: v0.29.0+
+
 ## [1.3.0] - 2026-01-17
 
 ### Added
