@@ -42,6 +42,7 @@ from .const import (
     CONF_DEVICE_SYNC_INTERVAL,
     CONF_ENABLE_SIMULATION,
     CONF_GRID_REGION,
+    CONF_INSTALLATION_MODE,
     CONF_OAUTH_TOKEN,
     CONF_POLLING_INTERVAL,
     CONF_SELECTED_ENTITIES,
@@ -54,6 +55,8 @@ from .const import (
     DEFAULT_DEVICE_SYNC_INTERVAL,
     DEFAULT_POLLING_INTERVAL,
     DOMAIN,
+    INSTALLATION_MODE_REAL,
+    INSTALLATION_MODE_SIMULATION,
 )
 from .device_sync_service import AmperaDeviceSyncService
 from .event_service import AmperaEventService
@@ -444,11 +447,20 @@ async def _async_setup_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> Non
     site_name = entry.data.get(CONF_SITE_NAME, "Home")
     grid_region = entry.data.get(CONF_GRID_REGION, "NO1")
 
+    # Check if simulation mode is enabled
+    installation_mode = entry.data.get(CONF_INSTALLATION_MODE, INSTALLATION_MODE_REAL)
+    is_simulation = installation_mode == INSTALLATION_MODE_SIMULATION
+
     # Dashboard URL path (must contain hyphen for HA requirement)
     url_path = f"ampaera-{site_id[:8]}"
 
-    # Load dashboard template
-    template_path = Path(__file__).parent / "dashboards" / "ampaera_dashboard.yaml"
+    # Load appropriate dashboard template based on mode
+    if is_simulation:
+        template_path = Path(__file__).parent / "dashboards" / "ampaera_dashboard_simulation.yaml"
+        _LOGGER.info("Using simulation dashboard template")
+    else:
+        template_path = Path(__file__).parent / "dashboards" / "ampaera_dashboard.yaml"
+
     if not template_path.exists():
         _LOGGER.warning("Dashboard template not found at %s", template_path)
         return
@@ -458,9 +470,15 @@ async def _async_setup_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> Non
         template = await hass.async_add_executor_job(
             template_path.read_text, "utf-8"
         )
+        # Slugify site name to match HA's entity ID generation
+        # HA uses this pattern: sensor.{device_name_slugified}_{entity_key}
+        from homeassistant.util import slugify
+        site_name_slug = slugify(site_name)
+
         dashboard_yaml = (
             template.replace("{site_id}", site_id)
             .replace("{site_name}", site_name)
+            .replace("{site_name_slug}", site_name_slug)
             .replace("{grid_region}", grid_region)
         )
 
@@ -518,20 +536,47 @@ async def _async_setup_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> Non
         )
         _LOGGER.info("Saved dashboard configuration to %s", dashboard_config_file)
 
-        # Notify user - dashboard will appear after HA restart
-        persistent_notification.async_create(
-            hass,
-            (
-                f"Your Ampæra Energy dashboard for **{site_name}** has been created!\n\n"
-                "**Restart Home Assistant** to see it in the sidebar.\n\n"
-                f"After restart, find it as **Ampæra - {site_name}** "
-                f"or navigate to `/lovelace/{url_path}`.\n\n"
-                "The dashboard includes real-time power, energy graphs, "
-                "device controls, and spot prices."
-            ),
-            title="Ampæra Dashboard Created - Restart Required",
-            notification_id=f"ampaera_dashboard_{site_id[:8]}",
-        )
+        # Try to reload lovelace to make dashboard appear immediately
+        # This uses HA's internal API - may not work in all versions
+        dashboard_appeared = False
+        try:
+            # Try to access lovelace storage and add dashboard dynamically
+            if "lovelace" in hass.data:
+                lovelace_data = hass.data["lovelace"]
+                if hasattr(lovelace_data, "dashboards"):
+                    # Newer HA versions have dashboards collection
+                    _LOGGER.info("Attempting to register dashboard dynamically")
+                    # The dashboard will be picked up on next lovelace access
+                    dashboard_appeared = True
+        except Exception as reload_err:
+            _LOGGER.debug("Could not reload lovelace dynamically: %s", reload_err)
+
+        # Notify user
+        if dashboard_appeared:
+            persistent_notification.async_create(
+                hass,
+                (
+                    f"Your Ampæra Energy dashboard for **{site_name}** has been created!\n\n"
+                    f"Find it as **Ampæra - {site_name}** in the sidebar "
+                    f"or navigate to `/lovelace/{url_path}`.\n\n"
+                    "If you don't see it, refresh your browser or restart Home Assistant."
+                ),
+                title="Ampæra Dashboard Created",
+                notification_id=f"ampaera_dashboard_{site_id[:8]}",
+            )
+        else:
+            persistent_notification.async_create(
+                hass,
+                (
+                    f"Your Ampæra Energy dashboard for **{site_name}** has been created!\n\n"
+                    "**Restart Home Assistant** to see it in the sidebar.\n\n"
+                    "Go to **Settings** → **System** → **Restart** (top right corner).\n\n"
+                    f"After restart, find it as **Ampæra - {site_name}** "
+                    f"or navigate to `/lovelace/{url_path}`."
+                ),
+                title="Ampæra Dashboard Created - Restart Required",
+                notification_id=f"ampaera_dashboard_{site_id[:8]}",
+            )
 
     except Exception as err:
         _LOGGER.error("Failed to create dashboard: %s", err)
@@ -548,12 +593,25 @@ async def _async_setup_dashboard_yaml_fallback(
     site_name = entry.data.get(CONF_SITE_NAME, "Home")
     grid_region = entry.data.get(CONF_GRID_REGION, "NO1")
 
+    # Check if simulation mode is enabled
+    installation_mode = entry.data.get(CONF_INSTALLATION_MODE, INSTALLATION_MODE_REAL)
+    is_simulation = installation_mode == INSTALLATION_MODE_SIMULATION
+
     if dashboard_yaml is None:
-        template_path = Path(__file__).parent / "dashboards" / "ampaera_dashboard.yaml"
+        from homeassistant.util import slugify
+        site_name_slug = slugify(site_name)
+
+        # Use appropriate template based on mode
+        if is_simulation:
+            template_path = Path(__file__).parent / "dashboards" / "ampaera_dashboard_simulation.yaml"
+        else:
+            template_path = Path(__file__).parent / "dashboards" / "ampaera_dashboard.yaml"
+
         template = await hass.async_add_executor_job(template_path.read_text, "utf-8")
         dashboard_yaml = (
             template.replace("{site_id}", site_id)
             .replace("{site_name}", site_name)
+            .replace("{site_name_slug}", site_name_slug)
             .replace("{grid_region}", grid_region)
         )
 
