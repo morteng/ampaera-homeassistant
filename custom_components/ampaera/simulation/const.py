@@ -29,6 +29,17 @@ WATER_HEATER_MAX_TEMP = 85.0
 WATER_HEATER_DEFAULT_TARGET = 65.0
 WATER_HEATER_HYSTERESIS = 2.0  # Start heating when temp falls this much below target
 
+# Water heater operation modes (for entity interface)
+WH_MODE_COMFORT = "Normal"  # Standard heating mode
+WH_MODE_ECO = "Eco"
+WH_MODE_BOOST = "Boost"
+WH_MODE_OFF = "Off"
+
+# Water heater entity temperature limits (more restrictive than simulation)
+MIN_WATER_TEMP = 40.0
+MAX_WATER_TEMP = 85.0
+DEFAULT_WATER_TEMP = 65.0
+
 # EV charger constants
 EV_CHARGER_MODEL = "SIM-EVC-32A"
 EV_CHARGER_VOLTAGE = 230  # Single-phase voltage

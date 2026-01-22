@@ -16,5 +16,5 @@
     "aiohttp>=3.9.0",
     "aiolimiter>=1.1.0"
   ],
-  "version": "1.5.1"
+  "version": "1.5.2"
 }

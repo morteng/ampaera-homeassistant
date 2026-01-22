@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING
 
 from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.config_entry_oauth2_flow import async_register_implementation
@@ -65,6 +66,15 @@ from .services import async_setup_services as async_setup_simulation_services
 from .services import async_unload_services as async_unload_simulation_services
 
 _LOGGER = logging.getLogger(__name__)
+
+# Platforms to forward to when simulation mode is enabled
+SIMULATION_PLATFORMS: list[Platform] = [
+    Platform.SENSOR,
+    Platform.SWITCH,
+    Platform.WATER_HEATER,
+    Platform.NUMBER,
+    Platform.SELECT,
+]
 
 
 async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
@@ -339,19 +349,16 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
 async def _async_setup_simulation_integration(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Set up embedded simulation when simulation mode is enabled.
 
-    Creates simulated smart home devices directly within the ampaera integration:
+    Creates simulated smart home devices via HA's native platform forwarding:
     - Water Heater (200L, 3kW) - temperature control and physics simulation
     - EV Charger (32A, single-phase) - charging simulation with SOC tracking
     - AMS Power Meter (3-phase) - aggregated power readings
 
-    This eliminates the need for a separate ampaera_sim integration.
+    Uses proper platform setup to ensure entities are registered correctly.
     """
-    from homeassistant.helpers.entity_platform import async_get_platforms
-
     try:
         # Import embedded simulation module
         from .simulation import async_setup_simulation
-        from .simulation.coordinator import SimulationCoordinator
 
         _LOGGER.info("Setting up embedded simulation for Ampæra")
 
@@ -361,18 +368,26 @@ async def _async_setup_simulation_integration(hass: HomeAssistant, entry: Config
         # Create and start the simulation coordinator
         coordinator = await async_setup_simulation(hass, entry, devices)
 
-        # Store coordinator in hass.data
+        # Store coordinator under the key expected by platform files
+        # Platform files expect hass.data[DOMAIN][entry.entry_id]["coordinator"]
         entry_data = hass.data[DOMAIN].get(entry.entry_id)
         if entry_data and isinstance(entry_data, dict):
-            entry_data["simulation_coordinator"] = coordinator
-
-        # Create simulation entities directly
-        await _async_create_simulation_entities(hass, coordinator)
+            entry_data["coordinator"] = coordinator
+            entry_data["simulation_coordinator"] = coordinator  # Keep for backwards compat
 
         _LOGGER.info(
-            "Embedded simulation started with %d devices: %s",
+            "Simulation coordinator initialized with %d devices: %s",
             len(devices),
             ", ".join(devices),
+        )
+
+        # Forward to simulation platforms using HA's native mechanism
+        # This ensures entities are properly registered in the entity registry
+        await hass.config_entries.async_forward_entry_setups(entry, SIMULATION_PLATFORMS)
+
+        _LOGGER.info(
+            "Embedded simulation platforms loaded: %s",
+            ", ".join([p.value for p in SIMULATION_PLATFORMS]),
         )
 
         # Schedule a delayed device sync to pick up the simulation entities
@@ -401,113 +416,6 @@ async def _async_setup_simulation_integration(hass: HomeAssistant, entry: Config
         )
     except Exception as err:
         _LOGGER.error("Failed to setup simulation: %s", err)
-
-
-async def _async_create_simulation_entities(
-    hass: HomeAssistant,
-    coordinator,
-) -> None:
-    """Create all simulation entities directly.
-
-    This bypasses the normal platform setup since ampaera doesn't use platforms.
-    Entities are created and added to the entity registry directly.
-    """
-    from homeassistant.helpers.entity_component import EntityComponent
-
-    from .simulation.number import EVChargerCurrentLimit
-    from .simulation.select import EVChargerStatusSelect, WaterHeaterModeSelect
-    from .simulation.sensor import (
-        EVChargerBatterySOCSensor,
-        EVChargerPowerSensor,
-        EVChargerSessionEnergySensor,
-        EVChargerTotalEnergySensor,
-        PowerMeterCurrentL1Sensor,
-        PowerMeterCurrentL2Sensor,
-        PowerMeterCurrentL3Sensor,
-        PowerMeterEnergyImportSensor,
-        PowerMeterPowerSensor,
-        PowerMeterVoltageL1Sensor,
-        PowerMeterVoltageL2Sensor,
-        PowerMeterVoltageL3Sensor,
-        WaterHeaterEnergySensor,
-        WaterHeaterPowerSensor,
-        WaterHeaterTemperatureSensor,
-    )
-    from .simulation.switch import (
-        EVChargerChargingSwitch,
-        EVChargerConnectedSwitch,
-        WaterHeaterHeatingSwitch,
-    )
-    from .simulation.water_heater import SimulatedWaterHeater
-
-    _LOGGER.info("Creating simulation entities...")
-
-    # Get or create entity components for each platform
-    # Using EntityComponent allows us to add entities without full platform setup
-    sensor_component = EntityComponent(_LOGGER, "sensor", hass)
-    switch_component = EntityComponent(_LOGGER, "switch", hass)
-    water_heater_component = EntityComponent(_LOGGER, "water_heater", hass)
-    number_component = EntityComponent(_LOGGER, "number", hass)
-    select_component = EntityComponent(_LOGGER, "select", hass)
-
-    # Create sensor entities
-    sensor_entities = [
-        WaterHeaterTemperatureSensor(coordinator),
-        WaterHeaterPowerSensor(coordinator),
-        WaterHeaterEnergySensor(coordinator),
-        EVChargerPowerSensor(coordinator),
-        EVChargerSessionEnergySensor(coordinator),
-        EVChargerTotalEnergySensor(coordinator),
-        EVChargerBatterySOCSensor(coordinator),
-        PowerMeterPowerSensor(coordinator),
-        PowerMeterVoltageL1Sensor(coordinator),
-        PowerMeterVoltageL2Sensor(coordinator),
-        PowerMeterVoltageL3Sensor(coordinator),
-        PowerMeterCurrentL1Sensor(coordinator),
-        PowerMeterCurrentL2Sensor(coordinator),
-        PowerMeterCurrentL3Sensor(coordinator),
-        PowerMeterEnergyImportSensor(coordinator),
-    ]
-
-    # Create switch entities
-    switch_entities = [
-        WaterHeaterHeatingSwitch(coordinator),
-        EVChargerConnectedSwitch(coordinator),
-        EVChargerChargingSwitch(coordinator),
-    ]
-
-    # Create water heater entity
-    water_heater_entities = [
-        SimulatedWaterHeater(coordinator),
-    ]
-
-    # Create number entities
-    number_entities = [
-        EVChargerCurrentLimit(coordinator),
-    ]
-
-    # Create select entities
-    select_entities = [
-        WaterHeaterModeSelect(coordinator),
-        EVChargerStatusSelect(coordinator),
-    ]
-
-    # Add all entities
-    await sensor_component.async_add_entities(sensor_entities)
-    await switch_component.async_add_entities(switch_entities)
-    await water_heater_component.async_add_entities(water_heater_entities)
-    await number_component.async_add_entities(number_entities)
-    await select_component.async_add_entities(select_entities)
-
-    _LOGGER.info(
-        "Created %d simulation entities (sensors: %d, switches: %d, water_heaters: %d, numbers: %d, selects: %d)",
-        len(sensor_entities) + len(switch_entities) + len(water_heater_entities) + len(number_entities) + len(select_entities),
-        len(sensor_entities),
-        len(switch_entities),
-        len(water_heater_entities),
-        len(number_entities),
-        len(select_entities),
-    )
 
 
 async def _async_setup_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -804,6 +712,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     data = hass.data[DOMAIN].pop(entry.entry_id, None)
     if not data:
         return True
+
+    # Unload simulation platforms if in simulation mode
+    installation_mode = entry.data.get(CONF_INSTALLATION_MODE)
+    if installation_mode == INSTALLATION_MODE_SIMULATION:
+        await hass.config_entries.async_unload_platforms(entry, SIMULATION_PLATFORMS)
 
     # Stop device sync service
     device_sync_service: AmperaDeviceSyncService = data.get("device_sync_service")

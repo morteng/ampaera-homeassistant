@@ -1,7 +1,8 @@
-"""Water heater platform for Ampæra Energy integration.
+"""Select platform for Ampæra Energy integration.
 
-When simulation mode is enabled, creates simulated water heater entity.
-When in real device mode, this platform is not used (devices are synced via push).
+When simulation mode is enabled, creates simulated device select controls:
+- Water heater mode selection
+- EV charger status selection
 """
 
 from __future__ import annotations
@@ -26,11 +27,11 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Ampæra water heaters from a config entry."""
+    """Set up Ampæra select entities from a config entry."""
     # Check if simulation mode is enabled
     installation_mode = entry.data.get(CONF_INSTALLATION_MODE)
     if installation_mode != INSTALLATION_MODE_SIMULATION:
-        _LOGGER.debug("Water heater platform: not in simulation mode, skipping")
+        _LOGGER.debug("Select platform: not in simulation mode, skipping")
         return
 
     # Get simulation coordinator
@@ -38,18 +39,22 @@ async def async_setup_entry(
     coordinator: SimulationCoordinator | None = entry_data.get("coordinator")
 
     if coordinator is None:
-        _LOGGER.warning("Water heater platform: simulation coordinator not found")
+        _LOGGER.warning("Select platform: simulation coordinator not found")
         return
 
-    # Import and setup simulation water heater
-    from .simulation.water_heater import SimulatedWaterHeater
-    from .simulation.const import DEVICE_WATER_HEATER
+    # Import and setup simulation selects
+    from .simulation.select import EVChargerStatusSelect, WaterHeaterModeSelect
+    from .simulation.const import DEVICE_EV_CHARGER, DEVICE_WATER_HEATER
 
     entities = []
 
-    # Water heater entity
+    # Water heater mode select
     if DEVICE_WATER_HEATER in coordinator.devices:
-        entities.append(SimulatedWaterHeater(coordinator))
+        entities.append(WaterHeaterModeSelect(coordinator))
 
-    _LOGGER.info("Adding %d simulation water heater entities", len(entities))
+    # EV charger status select
+    if DEVICE_EV_CHARGER in coordinator.devices:
+        entities.append(EVChargerStatusSelect(coordinator))
+
+    _LOGGER.info("Adding %d simulation select entities", len(entities))
     async_add_entities(entities)

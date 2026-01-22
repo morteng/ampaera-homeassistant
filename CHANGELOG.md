@@ -5,6 +5,19 @@ All notable changes to the Ampæra Home Assistant integration.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.2] - 2026-01-22
+
+### Fixed
+- **Simulation Entity Registration**: Replaced EntityComponent approach with proper Home Assistant platform forwarding
+  - Simulation entities now correctly register in the entity registry
+  - Dashboard entities resolve properly instead of showing "Entitet ikke funnet"
+  - Platform files (sensor.py, switch.py, number.py, select.py, water_heater.py) now act as simulation wrappers
+  - Uses `async_forward_entry_setups()` for proper HA integration
+
+### Changed
+- **Water Heater Modes**: Standardized operation modes to "Normal", "Eco", "Boost", "Off"
+- **Test Updates**: Updated test fixtures to properly mock coordinator's direct `water_heater` attribute
+
 ## [1.5.1] - 2026-01-22
 
 ### Fixed
