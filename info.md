@@ -1,6 +1,6 @@
 # Ampæra Energy - Home Assistant Integration
 
-**Version: 1.5.0**
+**Version: 1.5.1**
 
 Connect your Home Assistant to the Ampæra Smart Home Energy Management Platform.
 
@@ -9,6 +9,7 @@ Connect your Home Assistant to the Ampæra Smart Home Energy Management Platform
 - Remote device control from Ampæra dashboard
 - Automatic device discovery and sync
 - Norwegian grid region support (NO1-NO5)
+- OAuth2 authentication (recommended) or API key
 
 ## Links
 - [Documentation](https://github.com/morteng/ampaera-homeassistant)

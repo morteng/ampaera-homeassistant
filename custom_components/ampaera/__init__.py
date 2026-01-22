@@ -262,9 +262,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Register simulation services
     await async_setup_simulation_services(hass)
 
-    # Check if simulation is enabled
-    simulation_enabled = entry.data.get(CONF_ENABLE_SIMULATION, False) or entry.options.get(
-        CONF_ENABLE_SIMULATION, False
+    # Check if simulation is enabled (either via installation_mode or explicit enable_simulation toggle)
+    installation_mode = entry.data.get(CONF_INSTALLATION_MODE, INSTALLATION_MODE_REAL)
+    simulation_enabled = (
+        installation_mode == INSTALLATION_MODE_SIMULATION
+        or entry.data.get(CONF_ENABLE_SIMULATION, False)
+        or entry.options.get(CONF_ENABLE_SIMULATION, False)
     )
     if simulation_enabled:
         household_profile = entry.data.get(

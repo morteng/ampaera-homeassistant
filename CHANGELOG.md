@@ -5,6 +5,13 @@ All notable changes to the Ampæra Home Assistant integration.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2026-01-22
+
+### Fixed
+- **Simulation Mode Activation**: Fixed bug where simulation entities weren't created when `installation_mode` was set to "simulation"
+  - Now correctly checks both `installation_mode == "simulation"` AND `enable_simulation` toggle
+  - Users selecting "Simulation" mode during setup will now have simulation entities created
+
 ## [1.5.0] - 2026-01-22
 
 ### Added
