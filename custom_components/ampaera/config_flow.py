@@ -644,6 +644,12 @@ AmperaConfigFlow = AmperaOAuth2FlowHandler
 class AmperaOptionsFlow(OptionsFlow):
     """Handle options flow for Ampæra Energy.
 
+    Provides a menu-based interface with:
+    - Connection status checking
+    - Re-authentication capability
+    - Device management (add/remove synced devices)
+    - Settings configuration
+
     Options available depend on installation mode:
     - Real Device Mode: Polling intervals, voltage sensors, dev mode
     - Simulation Mode: Household profile, water heater type
@@ -655,14 +661,224 @@ class AmperaOptionsFlow(OptionsFlow):
     def __init__(self, config_entry: ConfigEntry) -> None:
         """Initialize options flow."""
         self._config_entry = config_entry
+        self._discovered_devices: list[Any] = []
 
     @property
     def config_entry(self) -> ConfigEntry:
         """Return the config entry for this flow."""
         return self._config_entry
 
-    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Handle the initial step of options flow."""
+    async def async_step_init(
+        self,
+        user_input: dict[str, Any] | None = None,  # noqa: ARG002
+    ) -> ConfigFlowResult:
+        """Show main options menu."""
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=["check_connection", "reauth", "manage_devices", "settings"],
+        )
+
+    async def async_step_check_connection(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Test connection to Ampæra and show status."""
+        if user_input is not None:
+            # User acknowledged result, return to menu
+            return await self.async_step_init()
+
+        # Get credentials from config entry
+        entry_data = self.config_entry.data
+        auth_method = entry_data.get(CONF_AUTH_METHOD)
+        api_url = entry_data.get(CONF_API_URL, DEFAULT_API_BASE_URL)
+
+        # Get token based on auth method
+        if auth_method == AUTH_METHOD_OAUTH:
+            token = entry_data.get(CONF_OAUTH_TOKEN)
+        else:
+            token = entry_data.get(CONF_API_KEY)
+
+        # Test connection
+        status = "unknown"
+        description = ""
+
+        if not token:
+            status = "no_credentials"
+            description = "No credentials found"
+        else:
+            api = AmperaApiClient(token, base_url=api_url)
+            try:
+                is_valid = await api.async_validate_token()
+                if is_valid:
+                    status = "connected"
+                    site_name = entry_data.get(CONF_SITE_NAME, "Unknown")
+                    description = f"Site: {site_name}"
+                else:
+                    status = "auth_failed"
+                    description = "Token is invalid or expired"
+            except AmperaConnectionError as e:
+                status = "connection_failed"
+                description = str(e)
+            except Exception as e:
+                _LOGGER.exception("Unexpected error checking connection: %s", e)
+                status = "error"
+                description = str(e)
+            finally:
+                await api.close()
+
+        return self.async_show_form(
+            step_id="check_connection",
+            description_placeholders={"status": status, "description": description},
+            data_schema=vol.Schema({}),  # Just OK button
+        )
+
+    async def async_step_reauth(
+        self,
+        user_input: dict[str, Any] | None = None,  # noqa: ARG002
+    ) -> ConfigFlowResult:
+        """Handle re-authentication - route based on auth method."""
+        auth_method = self.config_entry.data.get(CONF_AUTH_METHOD)
+
+        if auth_method == AUTH_METHOD_OAUTH:
+            # For OAuth, we need to trigger the main config flow reauth
+            # Show info message and abort to trigger proper reauth flow
+            return self.async_abort(reason="reauth_oauth")
+        else:
+            # For API key, show form to enter new key
+            return await self.async_step_reauth_api_key()
+
+    async def async_step_reauth_api_key(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Re-enter API key."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            api_key = user_input.get(CONF_API_KEY, "")
+            api_url = self.config_entry.data.get(CONF_API_URL, DEFAULT_API_BASE_URL)
+
+            if not api_key:
+                return self.async_show_form(
+                    step_id="reauth_api_key",
+                    data_schema=vol.Schema({vol.Required(CONF_API_KEY): str}),
+                    errors={"base": "invalid_auth"},
+                )
+
+            # Validate new API key
+            api = AmperaApiClient(api_key, base_url=api_url)
+            try:
+                if await api.async_validate_token():
+                    # Update config entry with new key
+                    new_data = {**self.config_entry.data, CONF_API_KEY: api_key}
+                    self.hass.config_entries.async_update_entry(
+                        self.config_entry, data=new_data
+                    )
+                    # Return to menu with success
+                    return self.async_create_entry(title="", data=self.config_entry.options)
+                else:
+                    errors["base"] = "invalid_auth"
+            except AmperaConnectionError:
+                errors["base"] = "cannot_connect"
+            except Exception as e:
+                _LOGGER.exception("Unexpected error during reauth: %s", e)
+                errors["base"] = "unknown"
+            finally:
+                await api.close()
+
+        return self.async_show_form(
+            step_id="reauth_api_key",
+            data_schema=vol.Schema({vol.Required(CONF_API_KEY): str}),
+            errors=errors,
+        )
+
+    async def async_step_manage_devices(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Manage which devices are synced to Ampæra."""
+        entry_data = self.config_entry.data
+        installation_mode = entry_data.get(CONF_INSTALLATION_MODE, INSTALLATION_MODE_REAL)
+        is_simulation = installation_mode == INSTALLATION_MODE_SIMULATION
+
+        if user_input is not None:
+            # User submitted new device selection
+            new_selected = user_input.get(CONF_SELECTED_ENTITIES, [])
+
+            # Update config entry data with new selection
+            new_data = {**entry_data, CONF_SELECTED_ENTITIES: new_selected}
+            self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
+
+            # The coordinator will pick up the change on next sync
+            _LOGGER.info("Updated device selection: %d devices", len(new_selected))
+
+            return self.async_create_entry(title="", data=self.config_entry.options)
+
+        # Discover all available devices (only in real mode)
+        device_options = []
+
+        if not is_simulation:
+            discovery = AmperaDeviceDiscovery(self.hass)
+            self._discovered_devices = discovery.discover_devices()
+
+            # Build options list from discovered devices
+            for device in self._discovered_devices:
+                device_options.append(
+                    SelectOptionDict(
+                        value=device.ha_device_id,
+                        label=f"{device.name} ({device.device_type.value})",
+                    )
+                )
+
+        # Get currently selected devices
+        current_selected = list(entry_data.get(CONF_SELECTED_ENTITIES, []))
+
+        # For simulation mode, add simulated device options
+        if is_simulation:
+            device_options = [
+                SelectOptionDict(value="sim_ams_meter", label="Simulated AMS Meter"),
+                SelectOptionDict(value="sim_water_heater", label="Simulated Water Heater"),
+                SelectOptionDict(value="sim_ev_charger", label="Simulated EV Charger"),
+                SelectOptionDict(value="sim_heat_pump", label="Simulated Heat Pump"),
+            ]
+
+        if not device_options:
+            # No devices available - show empty form with message
+            return self.async_show_form(
+                step_id="manage_devices",
+                data_schema=vol.Schema(
+                    {
+                        vol.Optional(CONF_SELECTED_ENTITIES, default=[]): SelectSelector(
+                            SelectSelectorConfig(
+                                options=[],
+                                multiple=True,
+                                mode=SelectSelectorMode.LIST,
+                            )
+                        ),
+                    }
+                ),
+                description_placeholders={"device_count": "0"},
+            )
+
+        return self.async_show_form(
+            step_id="manage_devices",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_SELECTED_ENTITIES, default=current_selected
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=device_options,
+                            multiple=True,
+                            mode=SelectSelectorMode.LIST,
+                        )
+                    ),
+                }
+            ),
+            description_placeholders={"device_count": str(len(device_options))},
+        )
+
+    async def async_step_settings(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Configure integration settings."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
@@ -746,6 +962,6 @@ class AmperaOptionsFlow(OptionsFlow):
             ] = bool
 
         return self.async_show_form(
-            step_id="init",
+            step_id="settings",
             data_schema=vol.Schema(schema_fields),
         )

@@ -57,6 +57,38 @@
   "options": {
     "step": {
       "init": {
+        "title": "Ampaera Options",
+        "menu_options": {
+          "check_connection": "Check Connection",
+          "reauth": "Re-authenticate",
+          "manage_devices": "Manage Devices",
+          "settings": "Settings"
+        }
+      },
+      "check_connection": {
+        "title": "Connection Status",
+        "description": "**Status:** {status}\n\n{description}",
+        "data": {}
+      },
+      "reauth": {
+        "title": "Re-authenticate",
+        "description": "Choose how to re-authenticate with Ampaera."
+      },
+      "reauth_api_key": {
+        "title": "Enter New API Key",
+        "description": "Enter a new API key to re-authenticate with Ampaera.",
+        "data": {
+          "api_key": "API Key"
+        }
+      },
+      "manage_devices": {
+        "title": "Manage Devices",
+        "description": "Select which devices to sync with Ampaera. Found {device_count} available devices.",
+        "data": {
+          "selected_entities": "Devices to sync"
+        }
+      },
+      "settings": {
         "title": "Ampaera Settings",
         "description": "Configure integration behavior, simulation, and synchronization settings.",
         "data": {
@@ -70,6 +102,9 @@
           "simulation_water_heater_type": "Water heater type"
         }
       }
+    },
+    "abort": {
+      "reauth_oauth": "OAuth re-authentication required. Please remove and re-add the integration to refresh OAuth credentials."
     }
   },
   "entity": {

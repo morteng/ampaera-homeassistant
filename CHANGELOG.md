@@ -5,6 +5,26 @@ All notable changes to the Ampæra Home Assistant integration.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-01-22
+
+### Added
+- **Embedded Simulation Module**: Simulation mode now works out of the box without a separate integration
+  - When "Simulation" mode is selected during setup, all simulated devices are created automatically
+  - Simulated AMS meter, water heater, and EV charger with physics-based behavior
+  - No need to install ampaera_sim separately via HACS
+- **Auto Lovelace Reload**: Dashboard now appears immediately without requiring HA restart
+  - Fires lovelace_updated event after dashboard creation
+  - Calls lovelace.reload_resources service for immediate UI update
+  - Improved notification messages to guide users
+
+### Fixed
+- Dashboard entity type: EV charger status now correctly references `select.simulated_ev_charger_status`
+- Simulation entities now register properly in Home Assistant
+
+### Compatibility
+- Home Assistant: 2024.1.0+
+- Ampæra API: v0.29.0+
+
 ## [1.4.0] - 2026-01-19
 
 ### Added

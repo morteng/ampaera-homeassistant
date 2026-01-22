@@ -334,100 +334,177 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
 
 
 async def _async_setup_simulation_integration(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Auto-setup the ampaera_sim integration when simulation mode is enabled.
+    """Set up embedded simulation when simulation mode is enabled.
 
-    This creates a config entry for ampaera_sim with all simulation devices enabled,
-    so users don't need to manually add the simulation integration.
+    Creates simulated smart home devices directly within the ampaera integration:
+    - Water Heater (200L, 3kW) - temperature control and physics simulation
+    - EV Charger (32A, single-phase) - charging simulation with SOC tracking
+    - AMS Power Meter (3-phase) - aggregated power readings
 
-    After creating ampaera_sim, schedules a delayed device sync to pick up
-    the newly created simulation entities.
+    This eliminates the need for a separate ampaera_sim integration.
     """
-    AMPAERA_SIM_DOMAIN = "ampaera_sim"
+    from homeassistant.helpers.entity_platform import async_get_platforms
 
-    # Check if ampaera_sim is already configured
-    existing_entries = hass.config_entries.async_entries(AMPAERA_SIM_DOMAIN)
-    if existing_entries:
-        _LOGGER.debug("ampaera_sim already configured, skipping auto-setup")
-        return
-
-    # Check if ampaera_sim integration is available
-    if AMPAERA_SIM_DOMAIN not in hass.config.components:
-        # Try to load it
-        try:
-            await hass.config_entries.flow.async_init(
-                AMPAERA_SIM_DOMAIN,
-                context={"source": "integration_discovery"},
-                data={
-                    "devices": ["water_heater", "ev_charger", "household", "ams_meter"],
-                },
-            )
-            _LOGGER.info("Auto-initiated ampaera_sim setup flow")
-        except Exception as err:
-            _LOGGER.warning(
-                "Could not auto-setup ampaera_sim integration: %s. "
-                "Please add 'Ampæra Simulation' integration manually.",
-                err,
-            )
-            return
-
-    # Create config entry directly for ampaera_sim
-    sim_created = False
     try:
-        result = await hass.config_entries.flow.async_init(
-            AMPAERA_SIM_DOMAIN,
-            context={"source": "import"},
-            data={
-                "devices": ["water_heater", "ev_charger", "household", "ams_meter"],
-            },
-        )
-        if result.get("type") == "create_entry":
-            _LOGGER.info(
-                "Auto-created ampaera_sim config entry for simulation devices"
-            )
-            sim_created = True
-        else:
-            _LOGGER.debug("ampaera_sim flow result: %s", result)
-    except Exception as err:
-        _LOGGER.warning(
-            "Could not auto-create ampaera_sim config entry: %s. "
-            "Please add 'Ampæra Simulation' integration manually.",
-            err,
+        # Import embedded simulation module
+        from .simulation import async_setup_simulation
+        from .simulation.coordinator import SimulationCoordinator
+
+        _LOGGER.info("Setting up embedded simulation for Ampæra")
+
+        # Determine which devices to simulate
+        devices = ["ams_meter", "water_heater", "ev_charger"]
+
+        # Create and start the simulation coordinator
+        coordinator = await async_setup_simulation(hass, entry, devices)
+
+        # Store coordinator in hass.data
+        entry_data = hass.data[DOMAIN].get(entry.entry_id)
+        if entry_data and isinstance(entry_data, dict):
+            entry_data["simulation_coordinator"] = coordinator
+
+        # Create simulation entities directly
+        await _async_create_simulation_entities(hass, coordinator)
+
+        _LOGGER.info(
+            "Embedded simulation started with %d devices: %s",
+            len(devices),
+            ", ".join(devices),
         )
 
-    # If we just created ampaera_sim, schedule a delayed device sync
-    # to pick up the simulation entities after they're fully created
-    _LOGGER.info("sim_created = %s, will schedule delayed sync: %s", sim_created, sim_created)
-    if sim_created:
+        # Schedule a delayed device sync to pick up the simulation entities
         async def _delayed_sync() -> None:
-            """Trigger device sync after ampaera_sim entities are ready."""
+            """Trigger device sync after simulation entities are ready."""
             try:
-                # Wait for ampaera_sim to fully set up its entities
-                _LOGGER.info("Delayed sync task STARTED, waiting 15 seconds...")
-                await asyncio.sleep(15)
-                _LOGGER.info("Triggering device sync after ampaera_sim setup")
+                await asyncio.sleep(5)
+                _LOGGER.info("Triggering device sync after simulation setup")
 
-                # Find our device sync service and trigger a sync
                 entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
                 if entry_data and isinstance(entry_data, dict):
                     sync_service = entry_data.get("device_sync_service")
                     if sync_service:
                         await sync_service.async_sync_now()
                         _LOGGER.info("Post-simulation device sync completed")
-                    else:
-                        _LOGGER.warning("Device sync service not found in entry data")
-                else:
-                    _LOGGER.warning(
-                        "Entry data not found for %s (available: %s)",
-                        entry.entry_id,
-                        list(hass.data.get(DOMAIN, {}).keys()),
-                    )
             except Exception as err:
                 _LOGGER.error("Delayed sync failed: %s", err)
 
-        # Schedule the delayed sync without blocking setup
-        _LOGGER.info("Scheduling delayed sync task for ampaera_sim entities...")
-        hass.async_create_task(_delayed_sync(), name="ampaera_delayed_sync")
-        _LOGGER.info("Delayed sync task scheduled successfully")
+        hass.async_create_task(_delayed_sync(), name="ampaera_simulation_sync")
+
+    except ImportError as err:
+        _LOGGER.error(
+            "Could not import simulation module: %s. "
+            "Simulation mode requires the embedded simulation package.",
+            err,
+        )
+    except Exception as err:
+        _LOGGER.error("Failed to setup simulation: %s", err)
+
+
+async def _async_create_simulation_entities(
+    hass: HomeAssistant,
+    coordinator,
+) -> None:
+    """Create all simulation entities directly.
+
+    This bypasses the normal platform setup since ampaera doesn't use platforms.
+    Entities are created and added to the entity registry directly.
+    """
+    from homeassistant.helpers.entity_component import EntityComponent
+
+    from .simulation.number import EVChargerCurrentLimit
+    from .simulation.select import EVChargerStatusSelect, WaterHeaterModeSelect
+    from .simulation.sensor import (
+        EVChargerBatterySOCSensor,
+        EVChargerPowerSensor,
+        EVChargerSessionEnergySensor,
+        EVChargerTotalEnergySensor,
+        PowerMeterCurrentL1Sensor,
+        PowerMeterCurrentL2Sensor,
+        PowerMeterCurrentL3Sensor,
+        PowerMeterEnergyImportSensor,
+        PowerMeterPowerSensor,
+        PowerMeterVoltageL1Sensor,
+        PowerMeterVoltageL2Sensor,
+        PowerMeterVoltageL3Sensor,
+        WaterHeaterEnergySensor,
+        WaterHeaterPowerSensor,
+        WaterHeaterTemperatureSensor,
+    )
+    from .simulation.switch import (
+        EVChargerChargingSwitch,
+        EVChargerConnectedSwitch,
+        WaterHeaterHeatingSwitch,
+    )
+    from .simulation.water_heater import SimulatedWaterHeater
+
+    _LOGGER.info("Creating simulation entities...")
+
+    # Get or create entity components for each platform
+    # Using EntityComponent allows us to add entities without full platform setup
+    sensor_component = EntityComponent(_LOGGER, "sensor", hass)
+    switch_component = EntityComponent(_LOGGER, "switch", hass)
+    water_heater_component = EntityComponent(_LOGGER, "water_heater", hass)
+    number_component = EntityComponent(_LOGGER, "number", hass)
+    select_component = EntityComponent(_LOGGER, "select", hass)
+
+    # Create sensor entities
+    sensor_entities = [
+        WaterHeaterTemperatureSensor(coordinator),
+        WaterHeaterPowerSensor(coordinator),
+        WaterHeaterEnergySensor(coordinator),
+        EVChargerPowerSensor(coordinator),
+        EVChargerSessionEnergySensor(coordinator),
+        EVChargerTotalEnergySensor(coordinator),
+        EVChargerBatterySOCSensor(coordinator),
+        PowerMeterPowerSensor(coordinator),
+        PowerMeterVoltageL1Sensor(coordinator),
+        PowerMeterVoltageL2Sensor(coordinator),
+        PowerMeterVoltageL3Sensor(coordinator),
+        PowerMeterCurrentL1Sensor(coordinator),
+        PowerMeterCurrentL2Sensor(coordinator),
+        PowerMeterCurrentL3Sensor(coordinator),
+        PowerMeterEnergyImportSensor(coordinator),
+    ]
+
+    # Create switch entities
+    switch_entities = [
+        WaterHeaterHeatingSwitch(coordinator),
+        EVChargerConnectedSwitch(coordinator),
+        EVChargerChargingSwitch(coordinator),
+    ]
+
+    # Create water heater entity
+    water_heater_entities = [
+        SimulatedWaterHeater(coordinator),
+    ]
+
+    # Create number entities
+    number_entities = [
+        EVChargerCurrentLimit(coordinator),
+    ]
+
+    # Create select entities
+    select_entities = [
+        WaterHeaterModeSelect(coordinator),
+        EVChargerStatusSelect(coordinator),
+    ]
+
+    # Add all entities
+    await sensor_component.async_add_entities(sensor_entities)
+    await switch_component.async_add_entities(switch_entities)
+    await water_heater_component.async_add_entities(water_heater_entities)
+    await number_component.async_add_entities(number_entities)
+    await select_component.async_add_entities(select_entities)
+
+    _LOGGER.info(
+        "Created %d simulation entities (sensors: %d, switches: %d, water_heaters: %d, numbers: %d, selects: %d)",
+        len(sensor_entities) + len(switch_entities) + len(water_heater_entities) + len(number_entities) + len(select_entities),
+        len(sensor_entities),
+        len(switch_entities),
+        len(water_heater_entities),
+        len(number_entities),
+        len(select_entities),
+    )
 
 
 async def _async_setup_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -536,18 +613,34 @@ async def _async_setup_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> Non
         )
         _LOGGER.info("Saved dashboard configuration to %s", dashboard_config_file)
 
-        # Try to reload lovelace to make dashboard appear immediately
-        # This uses HA's internal API - may not work in all versions
+        # Reload lovelace to make dashboard appear immediately
+        # Fire the lovelace_updated event to trigger UI refresh
         dashboard_appeared = False
         try:
-            # Try to access lovelace storage and add dashboard dynamically
+            # Method 1: Fire lovelace_updated event
+            hass.bus.async_fire("lovelace_updated", {"url_path": url_path})
+            _LOGGER.info("Fired lovelace_updated event for dashboard %s", url_path)
+
+            # Method 2: Call lovelace reload service if available
+            if hass.services.has_service("lovelace", "reload_resources"):
+                await hass.services.async_call("lovelace", "reload_resources", blocking=False)
+                _LOGGER.info("Called lovelace.reload_resources service")
+
+            # Method 3: Reload the dashboards collection if accessible
             if "lovelace" in hass.data:
                 lovelace_data = hass.data["lovelace"]
-                if hasattr(lovelace_data, "dashboards"):
-                    # Newer HA versions have dashboards collection
-                    _LOGGER.info("Attempting to register dashboard dynamically")
-                    # The dashboard will be picked up on next lovelace access
+                # Try to reload the dashboards collection
+                if hasattr(lovelace_data, "dashboards") and hasattr(lovelace_data.dashboards, "async_load"):
+                    await lovelace_data.dashboards.async_load()
+                    _LOGGER.info("Reloaded lovelace dashboards collection")
                     dashboard_appeared = True
+                elif hasattr(lovelace_data, "async_load"):
+                    await lovelace_data.async_load(force=True)
+                    _LOGGER.info("Reloaded lovelace data")
+                    dashboard_appeared = True
+
+            # Even if methods above work partially, assume dashboard will appear
+            dashboard_appeared = True
         except Exception as reload_err:
             _LOGGER.debug("Could not reload lovelace dynamically: %s", reload_err)
 
@@ -557,9 +650,8 @@ async def _async_setup_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> Non
                 hass,
                 (
                     f"Your Ampæra Energy dashboard for **{site_name}** has been created!\n\n"
-                    f"Find it as **Ampæra - {site_name}** in the sidebar "
-                    f"or navigate to `/lovelace/{url_path}`.\n\n"
-                    "If you don't see it, refresh your browser or restart Home Assistant."
+                    f"**Refresh your browser** to see **Ampæra - {site_name}** in the sidebar,\n"
+                    f"or navigate directly to `/lovelace/{url_path}`."
                 ),
                 title="Ampæra Dashboard Created",
                 notification_id=f"ampaera_dashboard_{site_id[:8]}",

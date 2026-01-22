@@ -85,6 +85,38 @@
   "options": {
     "step": {
       "init": {
+        "title": "Ampæra-alternativer",
+        "menu_options": {
+          "check_connection": "Sjekk tilkobling",
+          "reauth": "Autentiser på nytt",
+          "manage_devices": "Administrer enheter",
+          "settings": "Innstillinger"
+        }
+      },
+      "check_connection": {
+        "title": "Tilkoblingsstatus",
+        "description": "**Status:** {status}\n\n{description}",
+        "data": {}
+      },
+      "reauth": {
+        "title": "Autentiser på nytt",
+        "description": "Velg hvordan du vil autentisere på nytt med Ampæra."
+      },
+      "reauth_api_key": {
+        "title": "Oppgi ny API-nøkkel",
+        "description": "Oppgi en ny API-nøkkel for å autentisere på nytt med Ampæra.",
+        "data": {
+          "api_key": "API-nøkkel"
+        }
+      },
+      "manage_devices": {
+        "title": "Administrer enheter",
+        "description": "Velg hvilke enheter som skal synkroniseres med Ampæra. Fant {device_count} tilgjengelige enheter.",
+        "data": {
+          "selected_entities": "Enheter å synkronisere"
+        }
+      },
+      "settings": {
         "title": "Ampæra-innstillinger",
         "description": "Konfigurer integrasjon og synkroniseringsinnstillinger. Tilgjengelige valg avhenger av installasjonsmodus.",
         "data": {
@@ -106,6 +138,9 @@
           "simulation_water_heater_type": "Gammel (enkel) vs Smart påvirker tilgjengelige kontroller og sensorer"
         }
       }
+    },
+    "abort": {
+      "reauth_oauth": "OAuth-autentisering på nytt er nødvendig. Vennligst fjern og legg til integrasjonen på nytt for å oppdatere OAuth-legitimasjon."
     }
   },
   "application_credentials": {

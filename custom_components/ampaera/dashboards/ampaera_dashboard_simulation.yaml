@@ -120,7 +120,7 @@ views:
       - type: entities
         title: "Elbillader"
         entities:
-          - entity: sensor.simulated_ev_charger_status
+          - entity: select.simulated_ev_charger_status
             name: "Status"
           - entity: sensor.simulated_ev_charger_power
             name: "Effekt"
