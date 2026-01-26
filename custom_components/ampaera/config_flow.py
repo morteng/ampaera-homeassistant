@@ -145,9 +145,7 @@ class AmperaOAuth2FlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
         """Extra data to include in the authorize URL."""
         return {"scope": "ha:full"}
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the initial step - choose OAuth or API key."""
         if user_input is not None:
             auth_method = user_input.get(CONF_AUTH_METHOD, AUTH_METHOD_OAUTH)
@@ -675,7 +673,13 @@ class AmperaOptionsFlow(OptionsFlow):
         """Show main options menu."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["check_connection", "reauth", "manage_devices", "regenerate_dashboard", "settings"],
+            menu_options=[
+                "check_connection",
+                "reauth",
+                "manage_devices",
+                "regenerate_dashboard",
+                "settings",
+            ],
         )
 
     async def async_step_check_connection(
@@ -769,9 +773,7 @@ class AmperaOptionsFlow(OptionsFlow):
                 if await api.async_validate_token():
                     # Update config entry with new key
                     new_data = {**self.config_entry.data, CONF_API_KEY: api_key}
-                    self.hass.config_entries.async_update_entry(
-                        self.config_entry, data=new_data
-                    )
+                    self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
                     # Return to menu with success
                     return self.async_create_entry(title="", data=self.config_entry.options)
                 else:
@@ -861,9 +863,7 @@ class AmperaOptionsFlow(OptionsFlow):
             step_id="manage_devices",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(
-                        CONF_SELECTED_ENTITIES, default=current_selected
-                    ): SelectSelector(
+                    vol.Optional(CONF_SELECTED_ENTITIES, default=current_selected): SelectSelector(
                         SelectSelectorConfig(
                             options=device_options,
                             multiple=True,

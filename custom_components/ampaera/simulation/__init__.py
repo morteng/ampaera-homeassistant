@@ -97,6 +97,7 @@ async def async_setup_simulation_sensors(
 ) -> None:
     """Set up simulation sensor entities."""
     from .sensor import async_setup_simulation_sensors as setup_sensors
+
     await setup_sensors(hass, entry, async_add_entities, coordinator)
 
 
@@ -108,6 +109,7 @@ async def async_setup_simulation_switches(
 ) -> None:
     """Set up simulation switch entities."""
     from .switch import async_setup_simulation_switches as setup_switches
+
     await setup_switches(hass, entry, async_add_entities, coordinator)
 
 
@@ -119,6 +121,7 @@ async def async_setup_simulation_water_heaters(
 ) -> None:
     """Set up simulation water heater entities."""
     from .water_heater import async_setup_simulation_water_heaters as setup_water_heaters
+
     await setup_water_heaters(hass, entry, async_add_entities, coordinator)
 
 
@@ -130,6 +133,7 @@ async def async_setup_simulation_numbers(
 ) -> None:
     """Set up simulation number entities."""
     from .number import async_setup_simulation_numbers as setup_numbers
+
     await setup_numbers(hass, entry, async_add_entities, coordinator)
 
 
@@ -141,4 +145,5 @@ async def async_setup_simulation_selects(
 ) -> None:
     """Set up simulation select entities."""
     from .select import async_setup_simulation_selects as setup_selects
+
     await setup_selects(hass, entry, async_add_entities, coordinator)

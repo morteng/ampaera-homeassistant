@@ -113,15 +113,17 @@ class AmperaOAuth2Implementation(AuthImplementation):
         redirect_uri = self.redirect_uri
 
         # Build the authorize URL with PKCE
-        url = URL(self.authorize_url).with_query({
-            "response_type": "code",
-            "client_id": self.client_id,
-            "redirect_uri": redirect_uri,
-            "state": _encode_jwt(self.hass, {"flow_id": flow_id, "redirect_uri": redirect_uri}),
-            "code_challenge": code_challenge,
-            "code_challenge_method": "S256",
-            **self.extra_authorize_data,
-        })
+        url = URL(self.authorize_url).with_query(
+            {
+                "response_type": "code",
+                "client_id": self.client_id,
+                "redirect_uri": redirect_uri,
+                "state": _encode_jwt(self.hass, {"flow_id": flow_id, "redirect_uri": redirect_uri}),
+                "code_challenge": code_challenge,
+                "code_challenge_method": "S256",
+                **self.extra_authorize_data,
+            }
+        )
 
         return str(url)
 
@@ -132,13 +134,15 @@ class AmperaOAuth2Implementation(AuthImplementation):
         code_verifier = _PKCE_VERIFIERS.pop(flow_id, None)
 
         # Exchange the authorization code for tokens
-        return await self._token_request({
-            "grant_type": "authorization_code",
-            "code": external_data["code"],
-            "redirect_uri": external_data["state"]["redirect_uri"],
-            "client_id": self.client_id,
-            **({"code_verifier": code_verifier} if code_verifier else {}),
-        })
+        return await self._token_request(
+            {
+                "grant_type": "authorization_code",
+                "code": external_data["code"],
+                "redirect_uri": external_data["state"]["redirect_uri"],
+                "client_id": self.client_id,
+                **({"code_verifier": code_verifier} if code_verifier else {}),
+            }
+        )
 
 
 async def async_get_auth_implementation(

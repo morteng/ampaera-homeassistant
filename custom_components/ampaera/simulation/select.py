@@ -163,5 +163,3 @@ class EVChargerStatusSelect(CoordinatorEntity, SelectEntity):
             ev.is_charging = False
 
         await self.coordinator.async_request_refresh()
-
-

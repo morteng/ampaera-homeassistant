@@ -320,21 +320,25 @@ class SimulationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if hh.presence_mode == "home" and random.random() < 0.05:
             if hh.building_type == "cabin":
                 # Cabin-specific appliances
-                spike = random.choice([
-                    (1500, "Sauna heating"),
-                    (2200, "Kettle"),
-                    (1000, "Cooking"),
-                    (800, "Coffee maker"),
-                ])
+                spike = random.choice(
+                    [
+                        (1500, "Sauna heating"),
+                        (2200, "Kettle"),
+                        (1000, "Cooking"),
+                        (800, "Coffee maker"),
+                    ]
+                )
             else:
                 # Home appliances
-                spike = random.choice([
-                    (1800, "Cooking"),      # Stove/oven
-                    (2200, "Kettle"),       # Electric kettle
-                    (1500, "Dishwasher"),   # Dishwasher heating
-                    (2000, "Washing"),      # Washing machine heating
-                    (900, "Toaster"),       # Toaster
-                ])
+                spike = random.choice(
+                    [
+                        (1800, "Cooking"),  # Stove/oven
+                        (2200, "Kettle"),  # Electric kettle
+                        (1500, "Dishwasher"),  # Dishwasher heating
+                        (2000, "Washing"),  # Washing machine heating
+                        (900, "Toaster"),  # Toaster
+                    ]
+                )
             activity_load += spike[0]
             hh.activity = spike[1]
         else:
@@ -408,8 +412,12 @@ class SimulationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Simulate realistic voltage with slight variation
         variation = random.uniform(-AMS_METER_VOLTAGE_VARIATION, AMS_METER_VOLTAGE_VARIATION)
         pm.voltage_l1 = AMS_METER_NOMINAL_VOLTAGE + variation
-        pm.voltage_l2 = AMS_METER_NOMINAL_VOLTAGE + random.uniform(-AMS_METER_VOLTAGE_VARIATION, AMS_METER_VOLTAGE_VARIATION)
-        pm.voltage_l3 = AMS_METER_NOMINAL_VOLTAGE + random.uniform(-AMS_METER_VOLTAGE_VARIATION, AMS_METER_VOLTAGE_VARIATION)
+        pm.voltage_l2 = AMS_METER_NOMINAL_VOLTAGE + random.uniform(
+            -AMS_METER_VOLTAGE_VARIATION, AMS_METER_VOLTAGE_VARIATION
+        )
+        pm.voltage_l3 = AMS_METER_NOMINAL_VOLTAGE + random.uniform(
+            -AMS_METER_VOLTAGE_VARIATION, AMS_METER_VOLTAGE_VARIATION
+        )
 
         # Calculate currents - distribute loads across phases
         # Water heater on L1, EV charger on L2, Household split across L1 and L3

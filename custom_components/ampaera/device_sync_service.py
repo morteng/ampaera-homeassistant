@@ -283,7 +283,8 @@ class AmperaDeviceSyncService:
         if simulation_enabled:
             # In simulation mode, auto-include all ampaera_sim devices
             sim_devices = [
-                d for d in all_devices
+                d
+                for d in all_devices
                 if any(
                     "simulated_" in entity_id or "ampaera_sim" in entity_id
                     for entity_id in d.entity_mapping.values()

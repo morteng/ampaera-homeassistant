@@ -475,12 +475,11 @@ async def _async_create_or_update_dashboard(
 
     try:
         # Read template and substitute placeholders (use executor for file I/O)
-        template = await hass.async_add_executor_job(
-            template_path.read_text, "utf-8"
-        )
+        template = await hass.async_add_executor_job(template_path.read_text, "utf-8")
         # Slugify site name to match HA's entity ID generation
         # HA uses this pattern: sensor.{device_name_slugified}_{entity_key}
         from homeassistant.util import slugify
+
         site_name_slug = slugify(site_name)
 
         dashboard_yaml = (
@@ -499,7 +498,12 @@ async def _async_create_or_update_dashboard(
         dashboard_config_file = storage_dir / f"lovelace.{url_path}"
 
         # Read existing dashboards storage
-        dashboards_data = {"version": 1, "minor_version": 1, "key": "lovelace_dashboards", "data": {"items": []}}
+        dashboards_data = {
+            "version": 1,
+            "minor_version": 1,
+            "key": "lovelace_dashboards",
+            "data": {"items": []},
+        }
         if dashboards_file.exists():
             content = await hass.async_add_executor_job(dashboards_file.read_text, "utf-8")
             dashboards_data = json.loads(content)
@@ -510,7 +514,8 @@ async def _async_create_or_update_dashboard(
             if force:
                 # Remove existing dashboard entry for regeneration
                 dashboards_data["data"]["items"] = [
-                    item for item in dashboards_data["data"]["items"]
+                    item
+                    for item in dashboards_data["data"]["items"]
                     if item.get("url_path") != url_path
                 ]
                 _LOGGER.info("Removing existing dashboard %s for regeneration", url_path)
@@ -573,7 +578,9 @@ async def _async_create_or_update_dashboard(
             if "lovelace" in hass.data:
                 lovelace_data = hass.data["lovelace"]
                 # Try to reload the dashboards collection
-                if hasattr(lovelace_data, "dashboards") and hasattr(lovelace_data.dashboards, "async_load"):
+                if hasattr(lovelace_data, "dashboards") and hasattr(
+                    lovelace_data.dashboards, "async_load"
+                ):
                     await lovelace_data.dashboards.async_load()
                     _LOGGER.info("Reloaded lovelace dashboards collection")
                     dashboard_appeared = True
@@ -635,11 +642,14 @@ async def _async_setup_dashboard_yaml_fallback(
 
     if dashboard_yaml is None:
         from homeassistant.util import slugify
+
         site_name_slug = slugify(site_name)
 
         # Use appropriate template based on mode
         if is_simulation:
-            template_path = Path(__file__).parent / "dashboards" / "ampaera_dashboard_simulation.yaml"
+            template_path = (
+                Path(__file__).parent / "dashboards" / "ampaera_dashboard_simulation.yaml"
+            )
         else:
             template_path = Path(__file__).parent / "dashboards" / "ampaera_dashboard.yaml"
 
@@ -659,9 +669,7 @@ async def _async_setup_dashboard_yaml_fallback(
     dashboard_file = dashboards_dir / f"ampaera_{site_id[:8]}.yaml"
 
     if not dashboard_file.exists():
-        await hass.async_add_executor_job(
-            dashboard_file.write_text, dashboard_yaml, "utf-8"
-        )
+        await hass.async_add_executor_job(dashboard_file.write_text, dashboard_yaml, "utf-8")
         _LOGGER.info("Created Ampæra dashboard YAML at %s", dashboard_file)
 
         persistent_notification.async_create(

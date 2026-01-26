@@ -54,33 +54,39 @@ async def async_setup_entry(
 
     # Water heater sensors
     if DEVICE_WATER_HEATER in coordinator.devices:
-        entities.extend([
-            WaterHeaterTemperatureSensor(coordinator),
-            WaterHeaterPowerSensor(coordinator),
-            WaterHeaterEnergySensor(coordinator),
-        ])
+        entities.extend(
+            [
+                WaterHeaterTemperatureSensor(coordinator),
+                WaterHeaterPowerSensor(coordinator),
+                WaterHeaterEnergySensor(coordinator),
+            ]
+        )
 
     # EV charger sensors
     if DEVICE_EV_CHARGER in coordinator.devices:
-        entities.extend([
-            EVChargerPowerSensor(coordinator),
-            EVChargerSessionEnergySensor(coordinator),
-            EVChargerTotalEnergySensor(coordinator),
-            EVChargerBatterySOCSensor(coordinator),
-        ])
+        entities.extend(
+            [
+                EVChargerPowerSensor(coordinator),
+                EVChargerSessionEnergySensor(coordinator),
+                EVChargerTotalEnergySensor(coordinator),
+                EVChargerBatterySOCSensor(coordinator),
+            ]
+        )
 
     # Power meter sensors
     if DEVICE_AMS_METER in coordinator.devices:
-        entities.extend([
-            PowerMeterPowerSensor(coordinator),
-            PowerMeterVoltageL1Sensor(coordinator),
-            PowerMeterVoltageL2Sensor(coordinator),
-            PowerMeterVoltageL3Sensor(coordinator),
-            PowerMeterCurrentL1Sensor(coordinator),
-            PowerMeterCurrentL2Sensor(coordinator),
-            PowerMeterCurrentL3Sensor(coordinator),
-            PowerMeterEnergyImportSensor(coordinator),
-        ])
+        entities.extend(
+            [
+                PowerMeterPowerSensor(coordinator),
+                PowerMeterVoltageL1Sensor(coordinator),
+                PowerMeterVoltageL2Sensor(coordinator),
+                PowerMeterVoltageL3Sensor(coordinator),
+                PowerMeterCurrentL1Sensor(coordinator),
+                PowerMeterCurrentL2Sensor(coordinator),
+                PowerMeterCurrentL3Sensor(coordinator),
+                PowerMeterEnergyImportSensor(coordinator),
+            ]
+        )
 
     # Note: Household simulation runs internally to provide realistic background
     # load for the AMS meter, but is NOT exposed as a separate HA device.
@@ -480,5 +486,3 @@ class PowerMeterEnergyImportSensor(PowerMeterBaseSensor):
         if self.coordinator.power_meter:
             return round(self.coordinator.power_meter.energy_import_kwh, 2)
         return None
-
-

@@ -113,10 +113,6 @@ class HouseholdState:
     occupants: int = 4
 
     # Presence mode options
-    PRESENCE_MODES: list[str] = field(
-        default_factory=lambda: ["home", "away", "vacation"]
-    )
+    PRESENCE_MODES: list[str] = field(default_factory=lambda: ["home", "away", "vacation"])
     # Building type options
-    BUILDING_TYPES: list[str] = field(
-        default_factory=lambda: ["home", "cabin"]
-    )
+    BUILDING_TYPES: list[str] = field(default_factory=lambda: ["home", "cabin"])

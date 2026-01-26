@@ -58,10 +58,12 @@ async def async_setup_entry(
 
     # EV charger switches
     if DEVICE_EV_CHARGER in coordinator.devices:
-        entities.extend([
-            EVChargerConnectedSwitch(coordinator),
-            EVChargerChargingSwitch(coordinator),
-        ])
+        entities.extend(
+            [
+                EVChargerConnectedSwitch(coordinator),
+                EVChargerChargingSwitch(coordinator),
+            ]
+        )
 
     _LOGGER.info("Adding %d simulation switch entities", len(entities))
     async_add_entities(entities)

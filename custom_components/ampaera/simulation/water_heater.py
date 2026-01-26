@@ -56,8 +56,7 @@ class SimulatedWaterHeater(CoordinatorEntity, WaterHeaterEntity):
     _attr_has_entity_name = True
     _attr_name = None  # Uses device name directly
     _attr_supported_features = (
-        WaterHeaterEntityFeature.TARGET_TEMPERATURE
-        | WaterHeaterEntityFeature.OPERATION_MODE
+        WaterHeaterEntityFeature.TARGET_TEMPERATURE | WaterHeaterEntityFeature.OPERATION_MODE
     )
     _attr_operation_list = ["Normal", "Eco", "Boost", "Off"]
     _attr_min_temp = 40
