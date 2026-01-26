@@ -419,24 +419,41 @@ async def _async_setup_simulation_integration(hass: HomeAssistant, entry: Config
 
 
 async def _async_setup_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Auto-create and register Lovelace dashboard.
+    """Auto-create and register Lovelace dashboard (wrapper for entry setup)."""
+    site_id = entry.data[CONF_SITE_ID]
+    site_name = entry.data.get(CONF_SITE_NAME, "Home")
+    installation_mode = entry.data.get(CONF_INSTALLATION_MODE, INSTALLATION_MODE_REAL)
+
+    await _async_create_or_update_dashboard(hass, site_id, site_name, installation_mode)
+
+
+async def _async_create_or_update_dashboard(
+    hass: HomeAssistant,
+    site_id: str,
+    site_name: str,
+    installation_mode: str,
+    force: bool = False,
+) -> None:
+    """Create or update Lovelace dashboard.
 
     Creates a dashboard and registers it with Home Assistant so it appears
     in the sidebar automatically - no manual setup required.
 
     This works by directly adding to the lovelace_dashboards storage file,
     which is how HA's UI creates dashboards internally.
+
+    Args:
+        hass: Home Assistant instance
+        site_id: The Ampæra site ID
+        site_name: Human-readable site name
+        installation_mode: "real" or "simulation"
+        force: If True, delete and recreate existing dashboard
     """
     import json
 
     import yaml
 
-    site_id = entry.data[CONF_SITE_ID]
-    site_name = entry.data.get(CONF_SITE_NAME, "Home")
-    grid_region = entry.data.get(CONF_GRID_REGION, "NO1")
-
     # Check if simulation mode is enabled
-    installation_mode = entry.data.get(CONF_INSTALLATION_MODE, INSTALLATION_MODE_REAL)
     is_simulation = installation_mode == INSTALLATION_MODE_SIMULATION
 
     # Dashboard URL path (must contain hyphen for HA requirement)
@@ -467,7 +484,7 @@ async def _async_setup_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> Non
             template.replace("{site_id}", site_id)
             .replace("{site_name}", site_name)
             .replace("{site_name_slug}", site_name_slug)
-            .replace("{grid_region}", grid_region)
+            .replace("{grid_region}", "NO1")  # Default grid region
         )
 
         # Parse YAML to get dashboard config
@@ -487,8 +504,20 @@ async def _async_setup_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> Non
         # Check if dashboard already exists
         existing_ids = [item.get("url_path") for item in dashboards_data["data"]["items"]]
         if url_path in existing_ids:
-            _LOGGER.debug("Dashboard %s already registered, skipping", url_path)
-            return
+            if force:
+                # Remove existing dashboard entry for regeneration
+                dashboards_data["data"]["items"] = [
+                    item for item in dashboards_data["data"]["items"]
+                    if item.get("url_path") != url_path
+                ]
+                _LOGGER.info("Removing existing dashboard %s for regeneration", url_path)
+                # Delete the old config file
+                if dashboard_config_file.exists():
+                    await hass.async_add_executor_job(dashboard_config_file.unlink)
+                    _LOGGER.info("Deleted old dashboard config file %s", dashboard_config_file)
+            else:
+                _LOGGER.debug("Dashboard %s already registered, skipping", url_path)
+                return
 
         # Add new dashboard entry
         new_dashboard = {

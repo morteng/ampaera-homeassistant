@@ -5,6 +5,19 @@ All notable changes to the Ampæra Home Assistant integration.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.3] - 2026-01-22
+
+### Added
+- **Regenerate Dashboard Button**: New option in integration settings to regenerate dashboard
+  - Accessible via Settings → Devices & Services → Ampæra → Configure → "Regenerate Dashboard"
+  - Deletes existing dashboard and recreates with correct entity IDs
+  - Useful for users upgrading from older versions with broken dashboards
+  - Fully translated in English and Norwegian
+
+### Fixed
+- **Upgrade Path for Existing Users**: Users with older versions can now fix "Entity not found" errors
+  without removing and re-adding the integration
+
 ## [1.5.2] - 2026-01-22
 
 ### Fixed

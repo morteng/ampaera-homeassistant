@@ -90,6 +90,7 @@
           "check_connection": "Sjekk tilkobling",
           "reauth": "Autentiser på nytt",
           "manage_devices": "Administrer enheter",
+          "regenerate_dashboard": "Regenerer dashboard",
           "settings": "Innstillinger"
         }
       },
@@ -137,10 +138,15 @@
           "simulation_household_profile": "Familie bruker mer strøm, studenter mindre, pensjonister har andre tidspunkt",
           "simulation_water_heater_type": "Gammel (enkel) vs Smart påvirker tilgjengelige kontroller og sensorer"
         }
+      },
+      "regenerate_dashboard": {
+        "title": "Regenerer dashboard",
+        "description": "Dette vil slette og opprette Ampæra-dashboardet på nytt med oppdaterte entitets-IDer. Bruk dette hvis dashboardet viser «Entitet ikke funnet»-feil etter oppgradering av integrasjonen.\n\n**Klikk Send for å regenerere dashboardet.**"
       }
     },
     "abort": {
-      "reauth_oauth": "OAuth-autentisering på nytt er nødvendig. Vennligst fjern og legg til integrasjonen på nytt for å oppdatere OAuth-legitimasjon."
+      "reauth_oauth": "OAuth-autentisering på nytt er nødvendig. Vennligst fjern og legg til integrasjonen på nytt for å oppdatere OAuth-legitimasjon.",
+      "dashboard_regenerated": "Dashboard regenerert! Oppdater nettleseren for å se det oppdaterte dashboardet."
     }
   },
   "application_credentials": {

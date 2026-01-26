@@ -62,6 +62,7 @@
           "check_connection": "Check Connection",
           "reauth": "Re-authenticate",
           "manage_devices": "Manage Devices",
+          "regenerate_dashboard": "Regenerate Dashboard",
           "settings": "Settings"
         }
       },
@@ -101,10 +102,15 @@
           "simulation_household_profile": "Household profile",
           "simulation_water_heater_type": "Water heater type"
         }
+      },
+      "regenerate_dashboard": {
+        "title": "Regenerate Dashboard",
+        "description": "This will delete and recreate the Ampæra dashboard with the latest entity IDs. Use this if the dashboard shows 'Entity not found' errors after upgrading the integration.\n\n**Click Submit to regenerate the dashboard.**"
       }
     },
     "abort": {
-      "reauth_oauth": "OAuth re-authentication required. Please remove and re-add the integration to refresh OAuth credentials."
+      "reauth_oauth": "OAuth re-authentication required. Please remove and re-add the integration to refresh OAuth credentials.",
+      "dashboard_regenerated": "Dashboard regenerated successfully! Refresh your browser to see the updated dashboard."
     }
   },
   "entity": {

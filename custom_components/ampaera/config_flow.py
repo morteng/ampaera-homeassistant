@@ -675,7 +675,7 @@ class AmperaOptionsFlow(OptionsFlow):
         """Show main options menu."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["check_connection", "reauth", "manage_devices", "settings"],
+            menu_options=["check_connection", "reauth", "manage_devices", "regenerate_dashboard", "settings"],
         )
 
     async def async_step_check_connection(
@@ -873,6 +873,40 @@ class AmperaOptionsFlow(OptionsFlow):
                 }
             ),
             description_placeholders={"device_count": str(len(device_options))},
+        )
+
+    async def async_step_regenerate_dashboard(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Regenerate the Ampæra dashboard with correct entity IDs."""
+        if user_input is not None:
+            # User confirmed - regenerate dashboard
+            from . import _async_create_or_update_dashboard
+
+            entry_data = self.config_entry.data
+            site_id = entry_data.get(CONF_SITE_ID, "unknown")
+            site_name = entry_data.get(CONF_SITE_NAME, "Ampæra")
+            installation_mode = entry_data.get(CONF_INSTALLATION_MODE, INSTALLATION_MODE_REAL)
+
+            # Force regeneration by passing force=True
+            await _async_create_or_update_dashboard(
+                self.hass,
+                site_id,
+                site_name,
+                installation_mode,
+                force=True,
+            )
+
+            _LOGGER.info("Dashboard regenerated for site %s", site_name)
+
+            # Return with success message
+            return self.async_abort(reason="dashboard_regenerated")
+
+        # Show confirmation form
+        return self.async_show_form(
+            step_id="regenerate_dashboard",
+            data_schema=vol.Schema({}),  # Just confirm button
+            description_placeholders={},
         )
 
     async def async_step_settings(
