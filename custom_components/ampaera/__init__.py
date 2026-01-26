@@ -424,7 +424,9 @@ async def _async_setup_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> Non
     site_name = entry.data.get(CONF_SITE_NAME, "Home")
     installation_mode = entry.data.get(CONF_INSTALLATION_MODE, INSTALLATION_MODE_REAL)
 
-    await _async_create_or_update_dashboard(hass, site_id, site_name, installation_mode)
+    await _async_create_or_update_dashboard(
+        hass, site_id, site_name, installation_mode, entry=entry
+    )
 
 
 async def _async_create_or_update_dashboard(
@@ -433,6 +435,7 @@ async def _async_create_or_update_dashboard(
     site_name: str,
     installation_mode: str,
     force: bool = False,
+    entry: ConfigEntry | None = None,
 ) -> None:
     """Create or update Lovelace dashboard.
 
@@ -612,9 +615,10 @@ async def _async_create_or_update_dashboard(
 
     except Exception as err:
         _LOGGER.error("Failed to create dashboard: %s", err)
-        # Fall back to YAML file creation
-        with contextlib.suppress(Exception):
-            await _async_setup_dashboard_yaml_fallback(hass, entry, None)
+        # Fall back to YAML file creation if entry is available
+        if entry is not None:
+            with contextlib.suppress(Exception):
+                await _async_setup_dashboard_yaml_fallback(hass, entry, None)
 
 
 async def _async_setup_dashboard_yaml_fallback(

@@ -46,6 +46,7 @@ async def async_setup_entry(
         return
 
     # Import and setup simulation sensors
+    from .simulation.const import DEVICE_AMS_METER, DEVICE_EV_CHARGER, DEVICE_WATER_HEATER
     from .simulation.sensor import (
         EVChargerBatterySOCSensor,
         EVChargerPowerSensor,
@@ -63,7 +64,6 @@ async def async_setup_entry(
         WaterHeaterPowerSensor,
         WaterHeaterTemperatureSensor,
     )
-    from .simulation.const import DEVICE_AMS_METER, DEVICE_EV_CHARGER, DEVICE_WATER_HEATER
 
     entities = []
 

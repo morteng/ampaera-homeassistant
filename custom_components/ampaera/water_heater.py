@@ -42,8 +42,8 @@ async def async_setup_entry(
         return
 
     # Import and setup simulation water heater
-    from .simulation.water_heater import SimulatedWaterHeater
     from .simulation.const import DEVICE_WATER_HEATER
+    from .simulation.water_heater import SimulatedWaterHeater
 
     entities = []
 

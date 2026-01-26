@@ -42,8 +42,8 @@ async def async_setup_entry(
         return
 
     # Import and setup simulation numbers
-    from .simulation.number import EVChargerCurrentLimit
     from .simulation.const import DEVICE_EV_CHARGER
+    from .simulation.number import EVChargerCurrentLimit
 
     entities = []
 

@@ -43,8 +43,8 @@ async def async_setup_entry(
         return
 
     # Import and setup simulation selects
-    from .simulation.select import EVChargerStatusSelect, WaterHeaterModeSelect
     from .simulation.const import DEVICE_EV_CHARGER, DEVICE_WATER_HEATER
+    from .simulation.select import EVChargerStatusSelect, WaterHeaterModeSelect
 
     entities = []
 

@@ -43,12 +43,12 @@ async def async_setup_entry(
         return
 
     # Import and setup simulation switches
+    from .simulation.const import DEVICE_EV_CHARGER, DEVICE_WATER_HEATER
     from .simulation.switch import (
         EVChargerChargingSwitch,
         EVChargerConnectedSwitch,
         WaterHeaterHeatingSwitch,
     )
-    from .simulation.const import DEVICE_EV_CHARGER, DEVICE_WATER_HEATER
 
     entities = []
 

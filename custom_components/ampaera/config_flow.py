@@ -895,6 +895,7 @@ class AmperaOptionsFlow(OptionsFlow):
                 site_name,
                 installation_mode,
                 force=True,
+                entry=self.config_entry,
             )
 
             _LOGGER.info("Dashboard regenerated for site %s", site_name)
