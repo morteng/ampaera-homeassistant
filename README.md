@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://github.com/morteng/ampaera-homeassistant/releases"><img src="https://img.shields.io/github/release/morteng/ampaera-homeassistant.svg" alt="GitHub Release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License: Apache 2.0"></a>
-  <img src="https://img.shields.io/badge/HACS-Pending-yellow.svg" alt="HACS Pending">
+  <a href="https://github.com/hacs/default"><img src="https://img.shields.io/badge/HACS-Custom-orange.svg" alt="HACS Custom"></a>
 </p>
 
 <p align="center">
@@ -18,13 +18,14 @@
 
 - **OAuth2 Authentication** - Secure sign-in with your Ampæra account (recommended)
 - **Auto-Dashboard** - Ready-to-use Lovelace dashboard created automatically
+- **Regenerate Dashboard** - Fix broken dashboards via Settings → Configure
+- **Embedded Simulation** - Test without hardware (no separate integration needed)
 - **Real-time power monitoring** from Norwegian AMS smart meters
 - **Energy tracking** compatible with Home Assistant Energy Dashboard
 - **Device control** for water heaters and EV chargers
 - **Nord Pool spot prices** with cost calculations
 - **Multi-site support** for homes with multiple properties (hytte)
 - **Norwegian translations** (Bokmål)
-- **Simulation mode** for demos and testing without real hardware
 
 ## Requirements
 
@@ -35,9 +36,20 @@
 
 ## Installation
 
-### Manual Installation (Current Method)
+### HACS Installation (Recommended)
 
-> **Note**: We're awaiting acceptance into the HACS default repository. For now, manual installation is required.
+> **Note**: We're awaiting acceptance into the HACS default repository. Until then, add us as a custom repository (step 2-5 below).
+
+1. Open **HACS** in Home Assistant
+2. Click the **⋮** menu (top right) → **Custom repositories**
+3. Add repository: `morteng/ampaera-homeassistant`
+4. Select category: **Integration**
+5. Click **Add**
+6. Search for **"Ampæra"** in HACS Integrations
+7. Click **Download** → **Download** again to confirm
+8. Restart Home Assistant (Settings → System → Restart)
+
+### Manual Installation
 
 **Quick Install:**
 
@@ -56,14 +68,6 @@ config/
 ```
 
 For detailed instructions, alternative installation methods, and troubleshooting, see the **[Full Installation Guide](docs/INSTALLATION.md)**.
-
-### HACS Installation (Coming Soon)
-
-Once accepted into HACS:
-1. Open **HACS** in Home Assistant
-2. Click **Integrations** → **+ Explore & Download Repositories**
-3. Search for **"Ampæra Energy"**
-4. Click **Download** and restart Home Assistant
 
 ### Step 2: Add the Integration
 
@@ -105,7 +109,9 @@ You'll see two options:
 | Mode | Description | Use Case |
 |------|-------------|----------|
 | **Real Devices** | Connects to your physical smart devices | Production use |
-| **Simulation** | Creates simulated devices for testing | Demos, testing |
+| **Simulation** | Creates embedded simulated devices | Demos, testing |
+
+> **Simulation Mode**: Automatically creates simulated AMS meter, water heater, and EV charger with realistic behavior. No separate integration required.
 
 > **Note**: Modes are mutually exclusive. You cannot mix simulated and real devices.
 
@@ -327,6 +333,15 @@ automation:
 - Look for the Ampæra dashboard and click to enable it
 - The dashboard is created in `config/dashboards/` folder
 
+### Dashboard shows "Entity not found" errors
+
+This happens when upgrading from older versions with changed entity IDs:
+
+1. Go to **Settings → Devices & Services**
+2. Find **Ampæra** and click **Configure**
+3. Select **Regenerate Dashboard**
+4. Confirm to delete and recreate the dashboard with correct entity IDs
+
 ### Commands not working
 
 - Verify the device supports the command type
@@ -337,11 +352,26 @@ automation:
 
 ## Version History
 
-### v1.2.0 (Latest)
+### v1.5.3 (Latest)
+- **Regenerate Dashboard Button** - Fix broken dashboards via Settings → Configure
+- Improved upgrade path for existing users with "Entity not found" errors
+
+### v1.5.0
+- **Embedded Simulation Module** - No separate `ampaera_sim` integration needed
+- Simulated devices created automatically when selecting Simulation mode
+- Dashboard appears immediately without requiring restart
+
+### v1.4.0
+- **Simulation Dashboard Template** - Dedicated dashboard for simulation mode
+- Norwegian language dashboard labels
+
+### v1.3.0
+- **Icon Translations** - HA 2024.2+ compliant state-based icons
+- Improved household simulation (internal aggregation)
+
+### v1.2.0
 - **OAuth2 Authentication** - Sign in with your Ampæra account (recommended)
 - **Auto-Dashboard** - Lovelace dashboard created automatically after setup
-- Improved Norwegian translations
-- Better error handling
 
 ### v1.1.0
 - Simulation mode for demos and testing
