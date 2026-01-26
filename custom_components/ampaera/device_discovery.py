@@ -356,9 +356,16 @@ class AmperaDeviceDiscovery:
     one logical Ampæra device per physical device.
     """
 
-    def __init__(self, hass: HomeAssistant) -> None:
-        """Initialize device discovery."""
+    def __init__(self, hass: HomeAssistant, simulation_mode: bool = False) -> None:
+        """Initialize device discovery.
+
+        Args:
+            hass: Home Assistant instance
+            simulation_mode: If True, skip creating virtual devices that would
+                conflict with simulated devices (water_heater, ev_charger, ams_meter)
+        """
         self._hass = hass
+        self._simulation_mode = simulation_mode
         self._entity_registry: er.EntityRegistry | None = None
         self._device_registry: dr.DeviceRegistry | None = None
 
@@ -694,7 +701,24 @@ class AmperaDeviceDiscovery:
         # Step 3: Handle orphan entities - GROUP by type instead of individual devices
         # This creates virtual parent devices for orphan sensors of the same type
         orphan_groups = self._group_orphan_entities(orphan_entities)
+
+        # Virtual device types to skip when simulation mode is enabled
+        # (simulation already provides proper devices for these types)
+        simulation_virtual_types = {
+            "virtual_water_heater",
+            "virtual_ev_charger",
+            "virtual_power_meter",
+        }
+
         for group_id, orphan_group in orphan_groups.items():
+            # In simulation mode, skip virtual devices that conflict with simulated ones
+            if self._simulation_mode and group_id in simulation_virtual_types:
+                _LOGGER.debug(
+                    "Skipping virtual device %s in simulation mode (simulated device exists)",
+                    group_id,
+                )
+                continue
+
             device = self._build_orphan_group_device(group_id, orphan_group)
             if device:
                 devices.append(device)

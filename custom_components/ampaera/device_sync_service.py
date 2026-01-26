@@ -69,7 +69,12 @@ class AmperaDeviceSyncService:
         self._site_id = site_id
         self._selected_device_ids = set(selected_device_ids)
         self._sync_interval = sync_interval
-        self._discovery = AmperaDeviceDiscovery(hass)
+
+        # Check if simulation mode is enabled
+        installation_mode = entry.data.get("installation_mode", "real")
+        simulation_mode = installation_mode == "simulation"
+
+        self._discovery = AmperaDeviceDiscovery(hass, simulation_mode=simulation_mode)
         self._unsub_timer: asyncio.TimerHandle | None = None
         self._running = False
         # Maps ha_device_id → ampera_device_id
