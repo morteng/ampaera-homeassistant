@@ -609,12 +609,23 @@ class AmperaDeviceDiscovery:
                 return AmperaCapability.POWER, device_class
             elif device_class == "energy":
                 # Check if it's import/export or session energy
+                entity_name = entity_id.split(".")[1].lower()
                 if "export" in friendly_name:
                     return AmperaCapability.ENERGY_EXPORT, device_class
-                elif "import" in friendly_name:
+                elif "import" in friendly_name or "tpi" in entity_name:
+                    # "tpi" = Total Power Import (common AMS sensor naming)
                     return AmperaCapability.ENERGY_IMPORT, device_class
                 elif "session" in friendly_name:
                     return AmperaCapability.SESSION_ENERGY, device_class
+                # Skip sensors that are actually peak demand, not cumulative energy
+                # These are often misclassified with device_class="energy"
+                skip_patterns = {"max", "peak", "monthly", "hourly", "daily"}
+                if any(p in friendly_name or p in entity_name for p in skip_patterns):
+                    _LOGGER.debug(
+                        "Skipping non-cumulative energy sensor: %s (likely peak/max)",
+                        entity_id,
+                    )
+                    return None, None
                 return AmperaCapability.ENERGY, device_class
             elif device_class == "voltage":
                 # Check for phase-specific voltage
