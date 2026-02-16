@@ -587,6 +587,30 @@ class AmperaTelemetryPushService:
         elif capability == "charge_limit":
             reading["charge_limit_a"] = int(value)
 
+        elif capability == "energy_hour":
+            # AMS meter hourly energy register (kWh)
+            if unit == "Wh":
+                value /= 1000
+            elif unit == "MWh":
+                value *= 1000
+            reading["hour_energy_kwh"] = value
+
+        elif capability == "energy_day":
+            # AMS meter daily energy register (kWh)
+            if unit == "Wh":
+                value /= 1000
+            elif unit == "MWh":
+                value *= 1000
+            reading["day_energy_kwh"] = value
+
+        elif capability == "energy_month":
+            # AMS meter monthly energy register (kWh)
+            if unit == "Wh":
+                value /= 1000
+            elif unit == "MWh":
+                value *= 1000
+            reading["month_energy_kwh"] = value
+
         return reading
 
     def _format_water_heater_reading(

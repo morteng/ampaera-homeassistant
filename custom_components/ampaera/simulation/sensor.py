@@ -85,6 +85,9 @@ async def async_setup_entry(
                 PowerMeterCurrentL2Sensor(coordinator),
                 PowerMeterCurrentL3Sensor(coordinator),
                 PowerMeterEnergyImportSensor(coordinator),
+                PowerMeterHourEnergySensor(coordinator),
+                PowerMeterDayEnergySensor(coordinator),
+                PowerMeterMonthEnergySensor(coordinator),
             ]
         )
 
@@ -485,4 +488,67 @@ class PowerMeterEnergyImportSensor(PowerMeterBaseSensor):
         """Return energy import."""
         if self.coordinator.power_meter:
             return round(self.coordinator.power_meter.energy_import_kwh, 2)
+        return None
+
+
+class PowerMeterHourEnergySensor(PowerMeterBaseSensor):
+    """Power meter hourly energy register sensor."""
+
+    _attr_name = "Hourly Energy"
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_state_class = SensorStateClass.TOTAL
+
+    def __init__(self, coordinator: SimulationCoordinator) -> None:
+        """Initialize sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{DOMAIN}_ams_meter_hour_energy"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return current hour energy consumption."""
+        if self.coordinator.power_meter:
+            return round(self.coordinator.power_meter.hour_energy_kwh, 3)
+        return None
+
+
+class PowerMeterDayEnergySensor(PowerMeterBaseSensor):
+    """Power meter daily energy register sensor."""
+
+    _attr_name = "Daily Energy"
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_state_class = SensorStateClass.TOTAL
+
+    def __init__(self, coordinator: SimulationCoordinator) -> None:
+        """Initialize sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{DOMAIN}_ams_meter_day_energy"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return current day energy consumption."""
+        if self.coordinator.power_meter:
+            return round(self.coordinator.power_meter.day_energy_kwh, 3)
+        return None
+
+
+class PowerMeterMonthEnergySensor(PowerMeterBaseSensor):
+    """Power meter monthly energy register sensor."""
+
+    _attr_name = "Monthly Energy"
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_state_class = SensorStateClass.TOTAL
+
+    def __init__(self, coordinator: SimulationCoordinator) -> None:
+        """Initialize sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{DOMAIN}_ams_meter_month_energy"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return current month energy consumption."""
+        if self.coordinator.power_meter:
+            return round(self.coordinator.power_meter.month_energy_kwh, 3)
         return None

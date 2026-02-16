@@ -83,6 +83,10 @@ class PowerMeterState:
     current_l3: float = 0.0
     energy_import_kwh: float = 0.0
     energy_export_kwh: float = 0.0
+    # AMS meter period registers (reset at period boundaries)
+    hour_energy_kwh: float = 0.0  # Running total for current hour
+    day_energy_kwh: float = 0.0  # Running total for current day
+    month_energy_kwh: float = 0.0  # Running total for current month
 
 
 @dataclass

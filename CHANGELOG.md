@@ -5,6 +5,22 @@ All notable changes to the Ampæra Home Assistant integration.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-02-16
+
+### Added
+- **AMS Meter Register Support**: Auto-detect and forward hour/day/month energy registers from Norwegian AMS meters
+  - New capabilities: `ENERGY_HOUR`, `ENERGY_DAY`, `ENERGY_MONTH`
+  - Auto-detects AMS entities with "hour_used", "day_used", "month_used" patterns
+  - Maps to `hour_energy_kwh`, `day_energy_kwh`, `month_energy_kwh` in MQTT payload
+  - Enables cloud dashboard to show authoritative meter consumption instead of estimated aggregations
+- **Simulation Register Sensors**: New simulated sensor entities for hour/day/month energy registers
+  - `PowerMeterHourEnergySensor`, `PowerMeterDayEnergySensor`, `PowerMeterMonthEnergySensor`
+  - Realistic period boundary resets (hourly, daily, monthly)
+
+### Compatibility
+- Home Assistant: 2024.1.0+
+- Ampæra API: v0.33.0+
+
 ## [1.5.3] - 2026-01-22
 
 ### Added

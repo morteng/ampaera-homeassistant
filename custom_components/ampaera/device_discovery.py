@@ -61,6 +61,9 @@ class AmperaCapability(str, Enum):
     HUMIDITY = "humidity"
     CHARGE_LIMIT = "charge_limit"
     SESSION_ENERGY = "session_energy"
+    ENERGY_HOUR = "energy_hour"  # Current hour consumption (kWh) - AMS register
+    ENERGY_DAY = "energy_day"  # Current day consumption (kWh) - AMS register
+    ENERGY_MONTH = "energy_month"  # Current month consumption (kWh) - AMS register
 
 
 @dataclass
@@ -244,6 +247,13 @@ AMS_POWER_METER_SIGNALS = {
     "meter_id",
     "meter_manufacturer",
     "obis",  # OBIS code reference
+    # Hourly/daily/monthly energy registers
+    "hour_used",
+    "day_used",
+    "month_used",
+    "hourly_energy",
+    "daily_energy",
+    "monthly_energy",
     # Norwegian keywords (medium confidence)
     "ams",
     "han",
@@ -617,9 +627,26 @@ class AmperaDeviceDiscovery:
                     return AmperaCapability.ENERGY_IMPORT, device_class
                 elif "session" in friendly_name:
                     return AmperaCapability.SESSION_ENERGY, device_class
+                # AMS meter period registers (hour/day/month consumption)
+                # Check these BEFORE the skip_patterns to capture them correctly
+                elif any(
+                    p in friendly_name or p in entity_name
+                    for p in ("hour_used", "hourly_energy", "hour_energy")
+                ):
+                    return AmperaCapability.ENERGY_HOUR, device_class
+                elif any(
+                    p in friendly_name or p in entity_name
+                    for p in ("day_used", "daily_energy", "day_energy")
+                ):
+                    return AmperaCapability.ENERGY_DAY, device_class
+                elif any(
+                    p in friendly_name or p in entity_name
+                    for p in ("month_used", "monthly_energy", "month_energy")
+                ):
+                    return AmperaCapability.ENERGY_MONTH, device_class
                 # Skip sensors that are actually peak demand, not cumulative energy
                 # These are often misclassified with device_class="energy"
-                skip_patterns = {"max", "peak", "monthly", "hourly", "daily"}
+                skip_patterns = {"max", "peak"}
                 if any(p in friendly_name or p in entity_name for p in skip_patterns):
                     _LOGGER.debug(
                         "Skipping non-cumulative energy sensor: %s (likely peak/max)",

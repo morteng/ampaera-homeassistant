@@ -431,7 +431,27 @@ class SimulationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Accumulate energy (import only in this simulation)
         dt_hours = UPDATE_INTERVAL_SECONDS / 3600
-        pm.energy_import_kwh += (total_power / 1000) * dt_hours
+        energy_delta_kwh = (total_power / 1000) * dt_hours
+        pm.energy_import_kwh += energy_delta_kwh
+
+        # Update period registers (hour/day/month running totals)
+        now = dt_util.now()
+        pm.hour_energy_kwh += energy_delta_kwh
+        pm.day_energy_kwh += energy_delta_kwh
+        pm.month_energy_kwh += energy_delta_kwh
+
+        # Reset registers at period boundaries
+        # Note: These are approximate resets based on local time
+        if hasattr(self, "_last_register_hour"):
+            if now.hour != self._last_register_hour:
+                pm.hour_energy_kwh = energy_delta_kwh  # Start fresh for new hour
+            if now.day != self._last_register_day:
+                pm.day_energy_kwh = energy_delta_kwh  # Start fresh for new day
+            if now.month != self._last_register_month:
+                pm.month_energy_kwh = energy_delta_kwh  # Start fresh for new month
+        self._last_register_hour = now.hour
+        self._last_register_day = now.day
+        self._last_register_month = now.month
 
     # Public methods for external control (services)
 
