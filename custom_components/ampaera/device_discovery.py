@@ -247,13 +247,20 @@ AMS_POWER_METER_SIGNALS = {
     "meter_id",
     "meter_manufacturer",
     "obis",  # OBIS code reference
-    # Hourly/daily/monthly energy registers
+    # Hourly/daily/monthly energy registers (English + Norwegian)
     "hour_used",
     "day_used",
     "month_used",
     "hourly_energy",
     "daily_energy",
     "monthly_energy",
+    "today",
+    "this_hour",
+    "this_day",
+    "this_month",
+    "daily",
+    "daglig",
+    "i_dag",
     # Norwegian keywords (medium confidence)
     "ams",
     "han",
@@ -629,19 +636,43 @@ class AmperaDeviceDiscovery:
                     return AmperaCapability.SESSION_ENERGY, device_class
                 # AMS meter period registers (hour/day/month consumption)
                 # Check these BEFORE the skip_patterns to capture them correctly
+                # Includes Norwegian terms since AMS meters are Norwegian
+                # Both underscore (entity_name) and space (friendly_name) variants
                 elif any(
                     p in friendly_name or p in entity_name
-                    for p in ("hour_used", "hourly_energy", "hour_energy")
+                    for p in (
+                        "hour_used", "hour used", "hourly_energy", "hourly energy",
+                        "hour_energy", "hour energy",
+                        "this_hour", "this hour", "current_hour", "current hour",
+                        "accumulated_hour", "accumulated hour",
+                        "denne time", "denne_time", "time brukt", "time_brukt",
+                    )
                 ):
                     return AmperaCapability.ENERGY_HOUR, device_class
                 elif any(
                     p in friendly_name or p in entity_name
-                    for p in ("day_used", "daily_energy", "day_energy")
+                    for p in (
+                        "day_used", "day used", "daily_energy", "daily energy",
+                        "day_energy", "day energy",
+                        "today", "this_day", "this day",
+                        "current_day", "current day",
+                        "accumulated_day", "accumulated day",
+                        "i dag", "i_dag", "dag brukt", "dag_brukt",
+                        "daglig", "daily",
+                    )
                 ):
                     return AmperaCapability.ENERGY_DAY, device_class
                 elif any(
                     p in friendly_name or p in entity_name
-                    for p in ("month_used", "monthly_energy", "month_energy")
+                    for p in (
+                        "month_used", "month used", "monthly_energy", "monthly energy",
+                        "month_energy", "month energy",
+                        "this_month", "this month",
+                        "current_month", "current month",
+                        "accumulated_month", "accumulated month",
+                        "denne m", "maaned", "måned",
+                        "monthly", "month_consumption", "month consumption",
+                    )
                 ):
                     return AmperaCapability.ENERGY_MONTH, device_class
                 # Skip sensors that are actually peak demand, not cumulative energy
