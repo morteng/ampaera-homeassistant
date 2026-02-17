@@ -64,6 +64,10 @@ class AmperaCapability(str, Enum):
     ENERGY_HOUR = "energy_hour"  # Current hour consumption (kWh) - AMS register
     ENERGY_DAY = "energy_day"  # Current day consumption (kWh) - AMS register
     ENERGY_MONTH = "energy_month"  # Current month consumption (kWh) - AMS register
+    COST_DAY = "cost_day"  # Current day cost (NOK) - from AMS reader
+    PEAK_MONTH_1 = "peak_month_1"  # Highest hourly avg this month (kW)
+    PEAK_MONTH_2 = "peak_month_2"  # 2nd highest hourly avg (kW)
+    PEAK_MONTH_3 = "peak_month_3"  # 3rd highest hourly avg (kW)
 
 
 @dataclass
@@ -261,6 +265,20 @@ AMS_POWER_METER_SIGNALS = {
     "daily",
     "daglig",
     "i_dag",
+    # Peak demand registers (current month peak 1/2/3)
+    "current_month_peak",
+    "month_peak",
+    "peak_1",
+    "peak_2",
+    "peak_3",
+    "topp_1",
+    "topp_2",
+    "topp_3",
+    # Cost registers
+    "day_cost",
+    "dagens_kostnad",
+    "dagskostnad",
+    "today_cost",
     # Norwegian keywords (medium confidence)
     "ams",
     "han",
@@ -675,12 +693,40 @@ class AmperaDeviceDiscovery:
                     )
                 ):
                     return AmperaCapability.ENERGY_MONTH, device_class
+                # AMS peak demand registers (Current month peak 1/2/3)
+                # These have device_class="energy" but represent peak hourly averages
+                # Must be matched BEFORE skip_patterns to avoid being skipped
+                elif any(
+                    p in friendly_name or p in entity_name
+                    for p in (
+                        "peak 1", "peak_1", "topp 1", "topp_1",
+                        "current month peak 1", "current_month_peak_1",
+                    )
+                ):
+                    return AmperaCapability.PEAK_MONTH_1, device_class
+                elif any(
+                    p in friendly_name or p in entity_name
+                    for p in (
+                        "peak 2", "peak_2", "topp 2", "topp_2",
+                        "current month peak 2", "current_month_peak_2",
+                    )
+                ):
+                    return AmperaCapability.PEAK_MONTH_2, device_class
+                elif any(
+                    p in friendly_name or p in entity_name
+                    for p in (
+                        "peak 3", "peak_3", "topp 3", "topp_3",
+                        "current month peak 3", "current_month_peak_3",
+                    )
+                ):
+                    return AmperaCapability.PEAK_MONTH_3, device_class
                 # Skip sensors that are actually peak demand, not cumulative energy
                 # These are often misclassified with device_class="energy"
-                skip_patterns = {"max", "peak"}
+                # (generic "max"/"peak" without a number are still skipped)
+                skip_patterns = {"max"}
                 if any(p in friendly_name or p in entity_name for p in skip_patterns):
                     _LOGGER.debug(
-                        "Skipping non-cumulative energy sensor: %s (likely peak/max)",
+                        "Skipping non-cumulative energy sensor: %s (likely max demand)",
                         entity_id,
                     )
                     return None, None
@@ -705,6 +751,16 @@ class AmperaDeviceDiscovery:
                 return AmperaCapability.CURRENT, device_class
             elif device_class == "temperature":
                 return AmperaCapability.TEMPERATURE, device_class
+            elif device_class == "monetary":
+                entity_name = entity_id.split(".")[1].lower()
+                if any(
+                    p in friendly_name or p in entity_name
+                    for p in (
+                        "day cost", "day_cost", "today", "current day",
+                        "dagens kostnad", "dagskostnad", "dagens_kostnad",
+                    )
+                ):
+                    return AmperaCapability.COST_DAY, device_class
 
         # Water heater domain
         elif domain == "water_heater":

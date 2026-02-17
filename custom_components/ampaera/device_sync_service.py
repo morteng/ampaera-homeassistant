@@ -215,12 +215,14 @@ class AmperaDeviceSyncService:
 
             # Update device ID mappings (ha_device_id → ampera_device_id)
             new_device_mappings = result.get("device_mappings", {})
+            capability_overrides = result.get("capability_overrides", {})
             if new_device_mappings:
                 self._device_id_mappings = new_device_mappings
 
                 # Build entity mappings for push service
+                # Apply user capability overrides from server
                 self._entity_mappings = self._build_entity_mappings(
-                    selected_devices, new_device_mappings
+                    selected_devices, new_device_mappings, capability_overrides
                 )
 
                 # Update config entry data with new mappings
@@ -337,28 +339,36 @@ class AmperaDeviceSyncService:
         self,
         devices: list[DiscoveredDevice],
         device_id_mappings: dict[str, str],
+        capability_overrides: dict[str, dict[str, str]] | None = None,
     ) -> dict[str, EntityMapping]:
         """Build entity mappings from discovered devices.
 
         Args:
             devices: List of discovered devices with entity_mapping
             device_id_mappings: Mapping of ha_device_id → ampera_device_id
+            capability_overrides: Per-device user overrides from server:
+                {ha_device_id: {entity_id: capability}}
 
         Returns:
             Dict of entity_id → EntityMapping for push service
         """
         entity_mappings: dict[str, EntityMapping] = {}
+        overrides = capability_overrides or {}
 
         for device in devices:
             ampera_device_id = device_id_mappings.get(device.ha_device_id)
             if not ampera_device_id:
                 continue
 
+            device_overrides = overrides.get(device.ha_device_id, {})
+
             # Create EntityMapping for each entity in the device
             for capability, entity_id in device.entity_mapping.items():
+                # User override takes precedence over auto-detected capability
+                effective_capability = device_overrides.get(entity_id, capability)
                 entity_mappings[entity_id] = EntityMapping(
                     device_id=ampera_device_id,
-                    capability=capability,
+                    capability=effective_capability,
                     ha_device_id=device.ha_device_id,
                 )
 

@@ -175,12 +175,15 @@ class AmperaTelemetryPushService:
         for ha_device_id, device_info in device_mappings.items():
             ampera_device_id = device_info.get("device_id", "")
             entity_mapping = device_info.get("entity_mapping", {})
+            capability_overrides = device_info.get("capability_overrides", {})
 
             # Create EntityMapping for each entity in the device
             for capability, entity_id in entity_mapping.items():
+                # User override takes precedence over auto-detected capability
+                effective_capability = capability_overrides.get(entity_id, capability)
                 entity_mappings[entity_id] = EntityMapping(
                     device_id=ampera_device_id,
-                    capability=capability,
+                    capability=effective_capability,
                     ha_device_id=ha_device_id,
                 )
 
@@ -610,6 +613,28 @@ class AmperaTelemetryPushService:
             elif unit == "MWh":
                 value *= 1000
             reading["month_energy_kwh"] = value
+
+        elif capability == "cost_day":
+            # AMS meter daily cost register (NOK)
+            reading["day_cost_nok"] = value
+
+        elif capability == "peak_month_1":
+            # AMS meter monthly peak 1 (kW)
+            if unit == "W":
+                value /= 1000
+            reading["month_peak_1_kw"] = value
+
+        elif capability == "peak_month_2":
+            # AMS meter monthly peak 2 (kW)
+            if unit == "W":
+                value /= 1000
+            reading["month_peak_2_kw"] = value
+
+        elif capability == "peak_month_3":
+            # AMS meter monthly peak 3 (kW)
+            if unit == "W":
+                value /= 1000
+            reading["month_peak_3_kw"] = value
 
         return reading
 
