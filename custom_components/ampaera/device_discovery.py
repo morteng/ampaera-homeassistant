@@ -659,37 +659,71 @@ class AmperaDeviceDiscovery:
                 elif any(
                     p in friendly_name or p in entity_name
                     for p in (
-                        "hour_used", "hour used", "hourly_energy", "hourly energy",
-                        "hour_energy", "hour energy",
-                        "this_hour", "this hour", "current_hour", "current hour",
-                        "accumulated_hour", "accumulated hour",
-                        "denne time", "denne_time", "time brukt", "time_brukt",
+                        "hour_used",
+                        "hour used",
+                        "hourly_energy",
+                        "hourly energy",
+                        "hour_energy",
+                        "hour energy",
+                        "this_hour",
+                        "this hour",
+                        "current_hour",
+                        "current hour",
+                        "accumulated_hour",
+                        "accumulated hour",
+                        "denne time",
+                        "denne_time",
+                        "time brukt",
+                        "time_brukt",
                     )
                 ):
                     return AmperaCapability.ENERGY_HOUR, device_class
                 elif any(
                     p in friendly_name or p in entity_name
                     for p in (
-                        "day_used", "day used", "daily_energy", "daily energy",
-                        "day_energy", "day energy",
-                        "today", "this_day", "this day",
-                        "current_day", "current day",
-                        "accumulated_day", "accumulated day",
-                        "i dag", "i_dag", "dag brukt", "dag_brukt",
-                        "daglig", "daily",
+                        "day_used",
+                        "day used",
+                        "daily_energy",
+                        "daily energy",
+                        "day_energy",
+                        "day energy",
+                        "today",
+                        "this_day",
+                        "this day",
+                        "current_day",
+                        "current day",
+                        "accumulated_day",
+                        "accumulated day",
+                        "i dag",
+                        "i_dag",
+                        "dag brukt",
+                        "dag_brukt",
+                        "daglig",
+                        "daily",
                     )
                 ):
                     return AmperaCapability.ENERGY_DAY, device_class
                 elif any(
                     p in friendly_name or p in entity_name
                     for p in (
-                        "month_used", "month used", "monthly_energy", "monthly energy",
-                        "month_energy", "month energy",
-                        "this_month", "this month",
-                        "current_month", "current month",
-                        "accumulated_month", "accumulated month",
-                        "denne m", "maaned", "måned",
-                        "monthly", "month_consumption", "month consumption",
+                        "month_used",
+                        "month used",
+                        "monthly_energy",
+                        "monthly energy",
+                        "month_energy",
+                        "month energy",
+                        "this_month",
+                        "this month",
+                        "current_month",
+                        "current month",
+                        "accumulated_month",
+                        "accumulated month",
+                        "denne m",
+                        "maaned",
+                        "måned",
+                        "monthly",
+                        "month_consumption",
+                        "month consumption",
                     )
                 ):
                     return AmperaCapability.ENERGY_MONTH, device_class
@@ -699,24 +733,36 @@ class AmperaDeviceDiscovery:
                 elif any(
                     p in friendly_name or p in entity_name
                     for p in (
-                        "peak 1", "peak_1", "topp 1", "topp_1",
-                        "current month peak 1", "current_month_peak_1",
+                        "peak 1",
+                        "peak_1",
+                        "topp 1",
+                        "topp_1",
+                        "current month peak 1",
+                        "current_month_peak_1",
                     )
                 ):
                     return AmperaCapability.PEAK_MONTH_1, device_class
                 elif any(
                     p in friendly_name or p in entity_name
                     for p in (
-                        "peak 2", "peak_2", "topp 2", "topp_2",
-                        "current month peak 2", "current_month_peak_2",
+                        "peak 2",
+                        "peak_2",
+                        "topp 2",
+                        "topp_2",
+                        "current month peak 2",
+                        "current_month_peak_2",
                     )
                 ):
                     return AmperaCapability.PEAK_MONTH_2, device_class
                 elif any(
                     p in friendly_name or p in entity_name
                     for p in (
-                        "peak 3", "peak_3", "topp 3", "topp_3",
-                        "current month peak 3", "current_month_peak_3",
+                        "peak 3",
+                        "peak_3",
+                        "topp 3",
+                        "topp_3",
+                        "current month peak 3",
+                        "current_month_peak_3",
                     )
                 ):
                     return AmperaCapability.PEAK_MONTH_3, device_class
@@ -756,8 +802,13 @@ class AmperaDeviceDiscovery:
                 if any(
                     p in friendly_name or p in entity_name
                     for p in (
-                        "day cost", "day_cost", "today", "current day",
-                        "dagens kostnad", "dagskostnad", "dagens_kostnad",
+                        "day cost",
+                        "day_cost",
+                        "today",
+                        "current day",
+                        "dagens kostnad",
+                        "dagskostnad",
+                        "dagens_kostnad",
                     )
                 ):
                     return AmperaCapability.COST_DAY, device_class
