@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from homeassistant.helpers import device_registry as dr
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
-class AmperaDeviceType(str, Enum):
+class AmperaDeviceType(StrEnum):
     """Device types supported by Ampæra."""
 
     POWER_METER = "power_meter"
@@ -37,7 +37,7 @@ class AmperaDeviceType(str, Enum):
     SENSOR = "sensor"
 
 
-class AmperaCapability(str, Enum):
+class AmperaCapability(StrEnum):
     """Capabilities a device can have."""
 
     POWER = "power"  # Total power (preferred for primary entity)

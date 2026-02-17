@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import Context
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
-class HAEventSource(str, Enum):
+class HAEventSource(StrEnum):
     """Source types for HA-initiated device events.
 
     These map to different triggering mechanisms in Home Assistant.
