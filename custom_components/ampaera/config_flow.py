@@ -774,7 +774,12 @@ class AmperaOptionsFlow(OptionsFlow):
                     token_field = CONF_OAUTH_TOKEN if auth_method == AUTH_METHOD_OAUTH else CONF_API_KEY
                     new_data = {**self.config_entry.data, token_field: api_key}
                     self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
-                    # Return to menu with success
+                    # Reload so the running API client picks up the new token.
+                    # Without this, async_setup_entry is never re-run and the
+                    # integration keeps using the old expired token in memory.
+                    self.hass.async_create_task(
+                        self.hass.config_entries.async_reload(self.config_entry.entry_id)
+                    )
                     return self.async_create_entry(title="", data=self.config_entry.options)
                 else:
                     errors["base"] = "invalid_auth"
