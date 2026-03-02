@@ -597,11 +597,17 @@ class AmperaOAuth2FlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
                 if not valid:
                     errors["base"] = "invalid_auth"
                 else:
-                    # Update the existing entry
+                    # Update the existing entry, writing to the correct token field
+                    # based on the original auth method used during setup
                     reauth_entry = self._get_reauth_entry()
+                    auth_method = reauth_entry.data.get(CONF_AUTH_METHOD, AUTH_METHOD_API_KEY)
+                    if auth_method == AUTH_METHOD_OAUTH:
+                        token_update = {CONF_OAUTH_TOKEN: api_key}
+                    else:
+                        token_update = {CONF_API_KEY: api_key}
                     return self.async_update_reload_and_abort(
                         reauth_entry,
-                        data={**reauth_entry.data, CONF_API_KEY: api_key},
+                        data={**reauth_entry.data, **token_update},
                     )
 
             except AmperaAuthError:
