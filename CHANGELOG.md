@@ -5,6 +5,22 @@ All notable changes to the Ampæra Home Assistant integration.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.2] - 2026-03-02
+
+### Fixed
+- **Reauth token field mismatch**: Options flow reauth now writes the new API key to the correct config field (oauth_token vs api_key) based on the original auth method
+- **Reauth not reloading integration**: Options flow reauth now triggers an integration reload so the running API client picks up the new token immediately
+- **Config flow reauth missing API URL**: Config flow reauth now uses the stored API URL from the config entry instead of hardcoding the default URL
+- **Token fallback in setup**: Integration setup now checks both token fields (api_key and oauth_token) as a safety net, regardless of auth method
+- **Better reauth diagnostics**: Added detailed logging to both config flow and options flow reauth paths for easier troubleshooting
+
+### Changed
+- Updated reauth UI descriptions (English and Norwegian) to guide users to Settings → API Tokens
+
+### Compatibility
+- Home Assistant: 2024.1.0+
+- Ampæra API: v0.33.0+
+
 ## [1.6.0] - 2026-02-16
 
 ### Added

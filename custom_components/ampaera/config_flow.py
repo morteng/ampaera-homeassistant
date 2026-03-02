@@ -591,28 +591,39 @@ class AmperaOAuth2FlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
         if user_input is not None:
             api_key = user_input[CONF_API_KEY]
 
-            client = AmperaApiClient(api_key)
+            # Use the stored API URL from the failing config entry
+            reauth_entry = self._get_reauth_entry()
+            api_url = reauth_entry.data.get(CONF_API_URL, DEFAULT_API_BASE_URL)
+            _LOGGER.info("Reauth: validating new API key against %s", api_url)
+
+            client = AmperaApiClient(api_key, base_url=api_url)
             try:
                 valid = await client.async_validate_token()
                 if not valid:
+                    _LOGGER.warning("Reauth: token validation returned False")
                     errors["base"] = "invalid_auth"
                 else:
                     # Update the existing entry, writing to the correct token field
                     # based on the original auth method used during setup
-                    reauth_entry = self._get_reauth_entry()
                     auth_method = reauth_entry.data.get(CONF_AUTH_METHOD, AUTH_METHOD_API_KEY)
                     if auth_method == AUTH_METHOD_OAUTH:
                         token_update = {CONF_OAUTH_TOKEN: api_key}
                     else:
                         token_update = {CONF_API_KEY: api_key}
+                    _LOGGER.info(
+                        "Reauth successful, updating %s field and reloading",
+                        "oauth_token" if auth_method == AUTH_METHOD_OAUTH else "api_key",
+                    )
                     return self.async_update_reload_and_abort(
                         reauth_entry,
                         data={**reauth_entry.data, **token_update},
                     )
 
-            except AmperaAuthError:
+            except AmperaAuthError as err:
+                _LOGGER.warning("Reauth: auth error - %s", err)
                 errors["base"] = "invalid_auth"
-            except AmperaConnectionError:
+            except AmperaConnectionError as err:
+                _LOGGER.warning("Reauth: connection error - %s", err)
                 errors["base"] = "cannot_connect"
             except Exception:
                 _LOGGER.exception("Unexpected error during reauthentication")
