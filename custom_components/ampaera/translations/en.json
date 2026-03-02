@@ -59,7 +59,7 @@
       },
       "reauth_confirm": {
         "title": "Reauthenticate Ampæra",
-        "description": "Your session has expired. Please sign in again.",
+        "description": "Your Ampæra token has expired or been revoked. Enter a new API key to reconnect.\n\nGenerate one at **Settings → API Tokens** in the Ampæra web app.",
         "data": {
           "api_key": "API Key"
         }
@@ -105,7 +105,7 @@
       },
       "reauth_api_key": {
         "title": "Enter New API Key",
-        "description": "Enter a new API key to re-authenticate with Ampæra.",
+        "description": "Enter a new API key to re-authenticate with Ampæra. Generate one at **Settings → API Tokens** in the Ampæra web app.",
         "data": {
           "api_key": "API Key"
         }

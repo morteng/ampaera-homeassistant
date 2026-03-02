@@ -745,16 +745,8 @@ class AmperaOptionsFlow(OptionsFlow):
         self,
         user_input: dict[str, Any] | None = None,  # noqa: ARG002
     ) -> ConfigFlowResult:
-        """Handle re-authentication - route based on auth method."""
-        auth_method = self.config_entry.data.get(CONF_AUTH_METHOD)
-
-        if auth_method == AUTH_METHOD_OAUTH:
-            # For OAuth, we need to trigger the main config flow reauth
-            # Show info message and abort to trigger proper reauth flow
-            return self.async_abort(reason="reauth_oauth")
-        else:
-            # For API key, show form to enter new key
-            return await self.async_step_reauth_api_key()
+        """Handle re-authentication - show API key form regardless of original auth method."""
+        return await self.async_step_reauth_api_key()
 
     async def async_step_reauth_api_key(
         self, user_input: dict[str, Any] | None = None
@@ -777,8 +769,10 @@ class AmperaOptionsFlow(OptionsFlow):
             api = AmperaApiClient(api_key, base_url=api_url)
             try:
                 if await api.async_validate_token():
-                    # Update config entry with new key
-                    new_data = {**self.config_entry.data, CONF_API_KEY: api_key}
+                    # Update the correct token field based on the original auth method
+                    auth_method = self.config_entry.data.get(CONF_AUTH_METHOD, AUTH_METHOD_API_KEY)
+                    token_field = CONF_OAUTH_TOKEN if auth_method == AUTH_METHOD_OAUTH else CONF_API_KEY
+                    new_data = {**self.config_entry.data, token_field: api_key}
                     self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
                     # Return to menu with success
                     return self.async_create_entry(title="", data=self.config_entry.options)

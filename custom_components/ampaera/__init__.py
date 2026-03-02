@@ -107,16 +107,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """
     hass.data.setdefault(DOMAIN, {})
 
-    # Get config data - support both OAuth and API key auth
+    # Get config data - support both OAuth and API key auth.
+    # Try the canonical field for the auth method first, then fall back to the
+    # other field. This handles entries where the token was stored in the wrong
+    # field (e.g. after a failed reauth migration).
     auth_method = entry.data.get(CONF_AUTH_METHOD, AUTH_METHOD_API_KEY)
     if auth_method == AUTH_METHOD_OAUTH:
-        api_token = entry.data.get(CONF_OAUTH_TOKEN)
-        if not api_token:
-            raise ConfigEntryAuthFailed("OAuth token missing")
+        api_token = entry.data.get(CONF_OAUTH_TOKEN) or entry.data.get(CONF_API_KEY)
     else:
-        api_token = entry.data.get(CONF_API_KEY)
-        if not api_token:
-            raise ConfigEntryAuthFailed("API key missing")
+        api_token = entry.data.get(CONF_API_KEY) or entry.data.get(CONF_OAUTH_TOKEN)
+    if not api_token:
+        raise ConfigEntryAuthFailed("No API token found in config entry")
 
     api_url = entry.data.get(CONF_API_URL, DEFAULT_API_BASE_URL)
     site_id = entry.data[CONF_SITE_ID]

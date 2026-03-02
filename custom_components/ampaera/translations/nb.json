@@ -59,7 +59,7 @@
       },
       "reauth_confirm": {
         "title": "Autentiser Ampæra på nytt",
-        "description": "Økten din har utløpt. Vennligst logg inn på nytt.",
+        "description": "Ampæra-tokenet ditt har utløpt eller blitt tilbakekalt. Oppgi en ny API-nøkkel for å koble til igjen.\n\nOpprett en ny under **Innstillinger → API-nøkler** i Ampæra-appen.",
         "data": {
           "api_key": "API-nøkkel"
         }
@@ -105,7 +105,7 @@
       },
       "reauth_api_key": {
         "title": "Oppgi ny API-nøkkel",
-        "description": "Oppgi en ny API-nøkkel for å autentisere på nytt med Ampæra.",
+        "description": "Oppgi en ny API-nøkkel for å autentisere på nytt med Ampæra. Opprett en ny under **Innstillinger → API-nøkler** i Ampæra-appen.",
         "data": {
           "api_key": "API-nøkkel"
         }
