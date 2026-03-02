@@ -305,7 +305,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await _async_setup_simulation_integration(hass, entry)
 
     # Auto-create dashboard (non-blocking, errors don't fail setup)
-    await _async_setup_dashboard(hass, entry)
+    # Pass entity_mappings so real-mode dashboards reference actual HA entities
+    await _async_setup_dashboard(hass, entry, entity_mappings)
 
     _LOGGER.info(
         "Ampæra integration started for site '%s' (%s) with %d devices, %d entities%s",
@@ -419,15 +420,191 @@ async def _async_setup_simulation_integration(hass: HomeAssistant, entry: Config
         _LOGGER.error("Failed to setup simulation: %s", err)
 
 
-async def _async_setup_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
+async def _async_setup_dashboard(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    entity_mappings: dict[str, EntityMapping] | None = None,
+) -> None:
     """Auto-create and register Lovelace dashboard (wrapper for entry setup)."""
     site_id = entry.data[CONF_SITE_ID]
     site_name = entry.data.get(CONF_SITE_NAME, "Home")
     installation_mode = entry.data.get(CONF_INSTALLATION_MODE, INSTALLATION_MODE_REAL)
 
     await _async_create_or_update_dashboard(
-        hass, site_id, site_name, installation_mode, entry=entry
+        hass, site_id, site_name, installation_mode, entry=entry,
+        entity_mappings=entity_mappings,
     )
+
+
+def _build_real_mode_dashboard(
+    site_id: str,
+    site_name: str,
+    entity_mappings: dict[str, EntityMapping],
+) -> dict:
+    """Build a Lovelace dashboard config from actual synced entity mappings.
+
+    Groups entities by capability and creates appropriate cards
+    for the real HA entities (Tibber, AMS, etc.) that are synced to Ampæra.
+    """
+    # Group entities by capability
+    by_cap: dict[str, str] = {}  # capability -> entity_id
+    for entity_id, mapping in entity_mappings.items():
+        by_cap[mapping.capability] = entity_id
+
+    # Overview cards
+    overview_cards: list[dict] = []
+
+    # Power gauge
+    power_entity = by_cap.get("power")
+    if power_entity:
+        overview_cards.append({
+            "type": "gauge",
+            "entity": power_entity,
+            "name": "Nåværende effekt",
+            "min": 0,
+            "max": 15000,
+            "severity": {"green": 0, "yellow": 5000, "red": 10000},
+            "needle": True,
+            "unit": "W",
+        })
+
+    # Glance card with key metrics
+    glance_entities = []
+    for cap, label in [
+        ("power", "Effekt"),
+        ("energy_import", "Energi"),
+        ("hour_energy_kwh", "Siste time"),
+        ("day_energy_kwh", "I dag"),
+    ]:
+        if cap in by_cap:
+            glance_entities.append({"entity": by_cap[cap], "name": label})
+    if glance_entities:
+        overview_cards.append({
+            "type": "glance",
+            "title": "Nøkkeltall",
+            "entities": glance_entities,
+        })
+
+    # Power history graph
+    history_entities = []
+    if power_entity:
+        history_entities.append({"entity": power_entity, "name": "Total effekt"})
+    if history_entities:
+        overview_cards.append({
+            "type": "history-graph",
+            "title": "Effekthistorikk",
+            "hours_to_show": 24,
+            "entities": history_entities,
+        })
+
+    # Fallback if no entities at all
+    if not overview_cards:
+        overview_cards.append({
+            "type": "markdown",
+            "title": "Ingen enheter synkronisert",
+            "content": (
+                "Ingen enheter er synkronisert med Ampæra ennå.\n\n"
+                "Gå til **Innstillinger** → **Integrasjoner** → **Ampæra** "
+                "→ **Konfigurer** → **Administrer enheter** for å legge til enheter."
+            ),
+        })
+
+    # Energy tab cards
+    energy_cards: list[dict] = []
+
+    # Phase voltages
+    voltage_entities = []
+    for phase in ["voltage_l1", "voltage_l2", "voltage_l3"]:
+        if phase in by_cap:
+            label = phase.replace("voltage_", "Fase ").upper()
+            voltage_entities.append({"entity": by_cap[phase], "name": label})
+    if voltage_entities:
+        energy_cards.append({
+            "type": "entities",
+            "title": "Fasespenninger",
+            "entities": voltage_entities,
+        })
+
+    # Phase currents
+    current_entities = []
+    for phase in ["current_l1", "current_l2", "current_l3"]:
+        if phase in by_cap:
+            label = phase.replace("current_", "Fase ").upper()
+            current_entities.append({"entity": by_cap[phase], "name": label})
+    if current_entities:
+        energy_cards.append({
+            "type": "entities",
+            "title": "Fasestrømmer",
+            "entities": current_entities,
+        })
+
+    # Energy registers
+    energy_entities = []
+    for cap, label in [
+        ("energy_import", "Total import"),
+        ("hour_energy_kwh", "Siste time"),
+        ("day_energy_kwh", "I dag"),
+        ("month_energy_kwh", "Denne måneden"),
+    ]:
+        if cap in by_cap:
+            energy_entities.append({"entity": by_cap[cap], "name": label})
+    if energy_entities:
+        energy_cards.append({
+            "type": "entities",
+            "title": "Energiregistre",
+            "entities": energy_entities,
+        })
+
+    if not energy_cards:
+        energy_cards.append({
+            "type": "markdown",
+            "content": "Ingen energisensorer synkronisert.",
+        })
+
+    # Info tab
+    grid_region = "NO1"
+    info_cards: list[dict] = [
+        {
+            "type": "markdown",
+            "title": "Ampæra-integrasjon",
+            "content": (
+                f"**Sted:** {site_name}\n"
+                f"**Site ID:** {site_id}\n"
+                f"**Strømregion:** {grid_region}\n"
+                f"**Synkroniserte sensorer:** {len(entity_mappings)}\n\n"
+                "[Åpne Ampæra Dashboard](https://ampæra.no/dashboard)"
+            ),
+        },
+    ]
+
+    # Build views
+    views = [
+        {
+            "title": "Oversikt",
+            "path": "overview",
+            "icon": "mdi:home-lightning-bolt",
+            "cards": overview_cards,
+        },
+    ]
+    if energy_cards:
+        views.append({
+            "title": "Energi",
+            "path": "energy",
+            "icon": "mdi:flash",
+            "cards": energy_cards,
+        })
+    views.append({
+        "title": "Info",
+        "path": "info",
+        "icon": "mdi:information",
+        "cards": info_cards,
+    })
+
+    return {
+        "title": f"Ampæra - {site_name}",
+        "icon": "mdi:lightning-bolt",
+        "views": views,
+    }
 
 
 async def _async_create_or_update_dashboard(
@@ -437,14 +614,15 @@ async def _async_create_or_update_dashboard(
     installation_mode: str,
     force: bool = False,
     entry: ConfigEntry | None = None,
+    entity_mappings: dict[str, EntityMapping] | None = None,
 ) -> None:
     """Create or update Lovelace dashboard.
 
     Creates a dashboard and registers it with Home Assistant so it appears
     in the sidebar automatically - no manual setup required.
 
-    This works by directly adding to the lovelace_dashboards storage file,
-    which is how HA's UI creates dashboards internally.
+    For simulation mode: uses YAML template with known entity IDs.
+    For real mode: builds dashboard dynamically from actual synced entities.
 
     Args:
         hass: Home Assistant instance
@@ -452,6 +630,8 @@ async def _async_create_or_update_dashboard(
         site_name: Human-readable site name
         installation_mode: "real" or "simulation"
         force: If True, delete and recreate existing dashboard
+        entry: Optional config entry
+        entity_mappings: Entity mappings from device sync (for real mode)
     """
     import json
 
@@ -463,35 +643,34 @@ async def _async_create_or_update_dashboard(
     # Dashboard URL path (must contain hyphen for HA requirement)
     url_path = f"ampaera-{site_id[:8]}"
 
-    # Load appropriate dashboard template based on mode
-    if is_simulation:
-        template_path = Path(__file__).parent / "dashboards" / "ampaera_dashboard_simulation.yaml"
-        _LOGGER.info("Using simulation dashboard template")
-    else:
-        template_path = Path(__file__).parent / "dashboards" / "ampaera_dashboard.yaml"
-
-    if not template_path.exists():
-        _LOGGER.warning("Dashboard template not found at %s", template_path)
-        return
-
     try:
-        # Read template and substitute placeholders (use executor for file I/O)
-        template = await hass.async_add_executor_job(template_path.read_text, "utf-8")
-        # Slugify site name to match HA's entity ID generation
-        # HA uses this pattern: sensor.{device_name_slugified}_{entity_key}
-        from homeassistant.util import slugify
+        if is_simulation:
+            # Simulation mode: use YAML template with known entity IDs
+            template_path = (
+                Path(__file__).parent / "dashboards" / "ampaera_dashboard_simulation.yaml"
+            )
+            _LOGGER.info("Using simulation dashboard template")
 
-        site_name_slug = slugify(site_name)
+            if not template_path.exists():
+                _LOGGER.warning("Dashboard template not found at %s", template_path)
+                return
 
-        dashboard_yaml = (
-            template.replace("{site_id}", site_id)
-            .replace("{site_name}", site_name)
-            .replace("{site_name_slug}", site_name_slug)
-            .replace("{grid_region}", "NO1")  # Default grid region
-        )
+            template = await hass.async_add_executor_job(template_path.read_text, "utf-8")
+            from homeassistant.util import slugify
 
-        # Parse YAML to get dashboard config
-        dashboard_config = yaml.safe_load(dashboard_yaml)
+            site_name_slug = slugify(site_name)
+            dashboard_yaml = (
+                template.replace("{site_id}", site_id)
+                .replace("{site_name}", site_name)
+                .replace("{site_name_slug}", site_name_slug)
+                .replace("{grid_region}", "NO1")
+            )
+            dashboard_config = yaml.safe_load(dashboard_yaml)
+        else:
+            # Real mode: build dashboard dynamically from actual synced entities
+            dashboard_config = _build_real_mode_dashboard(
+                site_id, site_name, entity_mappings or {}
+            )
 
         # Storage file paths
         storage_dir = Path(hass.config.path(".storage"))

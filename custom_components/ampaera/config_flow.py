@@ -904,6 +904,15 @@ class AmperaOptionsFlow(OptionsFlow):
             site_name = entry_data.get(CONF_SITE_NAME, "Ampæra")
             installation_mode = entry_data.get(CONF_INSTALLATION_MODE, INSTALLATION_MODE_REAL)
 
+            # Get entity_mappings from running device sync service (for real mode)
+            entity_mappings = None
+            domain_data = self.hass.data.get(DOMAIN, {})
+            entry_runtime = domain_data.get(self.config_entry.entry_id)
+            if isinstance(entry_runtime, dict):
+                sync_svc = entry_runtime.get("device_sync_service")
+                if sync_svc:
+                    entity_mappings = sync_svc.entity_mappings
+
             # Force regeneration by passing force=True
             await _async_create_or_update_dashboard(
                 self.hass,
@@ -912,6 +921,7 @@ class AmperaOptionsFlow(OptionsFlow):
                 installation_mode,
                 force=True,
                 entry=self.config_entry,
+                entity_mappings=entity_mappings,
             )
 
             _LOGGER.info("Dashboard regenerated for site %s", site_name)

@@ -5,6 +5,12 @@ All notable changes to the Ampæra Home Assistant integration.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.3] - 2026-03-02
+
+### Fixed
+- **Real-mode dashboard shows "Entity not found"**: Dashboard template referenced non-existent `sensor.{site_name}_*` entities. Real mode now builds dashboard dynamically from actual synced HA entities (Tibber, AMS, etc.)
+- **Regenerate Dashboard uses actual entities**: The "Regenerate Dashboard" option now passes entity mappings from the running device sync service
+
 ## [1.6.2] - 2026-03-02
 
 ### Fixed
