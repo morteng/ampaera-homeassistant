@@ -33,6 +33,21 @@ def _get_integration_version() -> str:
 
 INTEGRATION_VERSION: Final = _get_integration_version()
 
+# Capability → dashboard usage mapping for entity browser display
+CAPABILITY_USAGE: Final[dict[str, list[str]]] = {
+    "power": ["Effektmåler", "Tidslinje", "Effekttariff"],
+    "voltage_l1": ["Fasespenning L1"],
+    "voltage_l2": ["Fasespenning L2"],
+    "voltage_l3": ["Fasespenning L3"],
+    "current_l1": ["Fasestrøm L1"],
+    "current_l2": ["Fasestrøm L2"],
+    "current_l3": ["Fasestrøm L3"],
+    "energy_import": ["Total energi"],
+    "hour_energy_kwh": ["Energiregister (time)", "Effekttariff"],
+    "day_energy_kwh": ["Energiregister (dag)", "Dashboard forbruk"],
+    "month_energy_kwh": ["Energiregister (måned)", "Effekttariff"],
+}
+
 # Configuration - Authentication
 CONF_API_KEY: Final = "api_key"
 
@@ -45,6 +60,11 @@ CONF_GRID_REGION: Final = "grid_region"
 # Configuration - Devices (v2.0 push architecture)
 CONF_DEVICE_MAPPINGS: Final = "device_mappings"
 CONF_SELECTED_ENTITIES: Final = "selected_entities"
+
+# Sensor streams (Data Lab)
+CONF_SENSOR_STREAM_ENTITIES: Final = "sensor_stream_entities"
+CONF_SENSOR_STREAM_INTERVAL: Final = "sensor_stream_interval"
+DEFAULT_SENSOR_STREAM_INTERVAL: Final = 60  # seconds
 
 # Configuration - Options
 CONF_POLLING_INTERVAL: Final = "polling_interval"

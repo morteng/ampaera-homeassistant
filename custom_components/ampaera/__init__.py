@@ -189,6 +189,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Create telemetry push service with entity mappings from device sync
     # Pass event_service for on/off state change reporting
+    # Pass config_entry for sensor stream options (Data Lab publisher)
     push_service = AmperaTelemetryPushService(
         hass=hass,
         api_client=api,
@@ -196,6 +197,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entity_mappings=entity_mappings,
         debounce_seconds=float(push_interval),
         event_service=event_service,
+        config_entry=entry,
     )
 
     # Create command polling service (uses device_id_mappings for command routing)

@@ -36,6 +36,10 @@ except ImportError:
     from homeassistant.data_entry_flow import FlowResult as ConfigFlowResult
 from homeassistant.core import callback
 from homeassistant.helpers.selector import (
+    EntitySelector,
+    EntitySelectorConfig,
+    NumberSelector,
+    NumberSelectorConfig,
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
@@ -54,6 +58,7 @@ from .application_credentials import AmperaOAuth2Implementation
 from .const import (
     AUTH_METHOD_API_KEY,
     AUTH_METHOD_OAUTH,
+    CAPABILITY_USAGE,
     CONF_API_KEY,
     CONF_API_URL,
     CONF_AUTH_METHOD,
@@ -70,6 +75,8 @@ from .const import (
     CONF_OAUTH_TOKEN,
     CONF_POLLING_INTERVAL,
     CONF_SELECTED_ENTITIES,
+    CONF_SENSOR_STREAM_ENTITIES,
+    CONF_SENSOR_STREAM_INTERVAL,
     CONF_SIMULATION_HOUSEHOLD_PROFILE,
     CONF_SIMULATION_WATER_HEATER_TYPE,
     CONF_SITE_ID,
@@ -78,6 +85,7 @@ from .const import (
     DEFAULT_COMMAND_POLL_INTERVAL,
     DEFAULT_DEVICE_SYNC_INTERVAL,
     DEFAULT_POLLING_INTERVAL,
+    DEFAULT_SENSOR_STREAM_INTERVAL,
     DOMAIN,
     GRID_REGIONS,
     INSTALLATION_MODE_REAL,
@@ -695,6 +703,8 @@ class AmperaOptionsFlow(OptionsFlow):
                 "reauth",
                 "manage_devices",
                 "regenerate_dashboard",
+                "entity_browser",
+                "sensor_streams",
                 "settings",
             ],
         )
@@ -934,6 +944,106 @@ class AmperaOptionsFlow(OptionsFlow):
             step_id="regenerate_dashboard",
             data_schema=vol.Schema({}),  # Just confirm button
             description_placeholders={},
+        )
+
+    async def async_step_entity_browser(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show entity browser: all synced entities with current values and usage."""
+        if user_input is not None:
+            return await self.async_step_init()
+
+        # Get entity_mappings from running device sync service
+        entity_mappings = {}
+        domain_data = self.hass.data.get(DOMAIN, {})
+        entry_runtime = domain_data.get(self.config_entry.entry_id)
+        if isinstance(entry_runtime, dict):
+            sync_svc = entry_runtime.get("device_sync_service")
+            if sync_svc:
+                entity_mappings = sync_svc.entity_mappings
+
+        if not entity_mappings:
+            return self.async_show_form(
+                step_id="entity_browser",
+                data_schema=vol.Schema({}),
+                description_placeholders={
+                    "entity_table": "Ingen entiteter synkronisert ennå."
+                },
+            )
+
+        # Build markdown table of all synced entities
+        lines = [
+            "| HA-entitet | Verdi | Brukes til |",
+            "|------------|-------|-----------|",
+        ]
+
+        for entity_id, mapping in sorted(entity_mappings.items()):
+            state = self.hass.states.get(entity_id)
+            if state:
+                value = state.state
+                unit = state.attributes.get("unit_of_measurement", "")
+                display_value = f"{value} {unit}".strip() if unit else value
+            else:
+                display_value = "utilgjengelig"
+
+            usage_list = CAPABILITY_USAGE.get(mapping.capability, ["Ukjent"])
+            usage = ", ".join(usage_list)
+
+            lines.append(f"| `{entity_id}` | {display_value} | {usage} |")
+
+        table_md = "\n".join(lines)
+
+        return self.async_show_form(
+            step_id="entity_browser",
+            data_schema=vol.Schema({}),
+            description_placeholders={"entity_table": table_md},
+        )
+
+    async def async_step_sensor_streams(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Configure which HA sensor entities to forward to the Data Lab."""
+        if user_input is not None:
+            new_options = dict(self.config_entry.options)
+            new_options[CONF_SENSOR_STREAM_ENTITIES] = user_input.get(
+                CONF_SENSOR_STREAM_ENTITIES, []
+            )
+            new_options[CONF_SENSOR_STREAM_INTERVAL] = user_input.get(
+                CONF_SENSOR_STREAM_INTERVAL, DEFAULT_SENSOR_STREAM_INTERVAL
+            )
+            return self.async_create_entry(title="", data=new_options)
+
+        current_entities = self.config_entry.options.get(CONF_SENSOR_STREAM_ENTITIES, [])
+        current_interval = self.config_entry.options.get(
+            CONF_SENSOR_STREAM_INTERVAL, DEFAULT_SENSOR_STREAM_INTERVAL
+        )
+
+        return self.async_show_form(
+            step_id="sensor_streams",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_SENSOR_STREAM_ENTITIES,
+                        default=current_entities,
+                    ): EntitySelector(
+                        EntitySelectorConfig(
+                            domain="sensor",
+                            multiple=True,
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_SENSOR_STREAM_INTERVAL,
+                        default=current_interval,
+                    ): NumberSelector(
+                        NumberSelectorConfig(
+                            min=30,
+                            max=3600,
+                            step=30,
+                            unit_of_measurement="seconds",
+                        )
+                    ),
+                }
+            ),
         )
 
     async def async_step_settings(

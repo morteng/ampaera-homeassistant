@@ -91,7 +91,9 @@
           "reauth": "Re-authenticate",
           "manage_devices": "Manage Devices",
           "regenerate_dashboard": "Regenerate Dashboard",
-          "settings": "Settings"
+          "entity_browser": "Entity Browser",
+          "settings": "Settings",
+          "sensor_streams": "Sensor Streams"
         }
       },
       "check_connection": {
@@ -142,6 +144,22 @@
       "regenerate_dashboard": {
         "title": "Regenerate Dashboard",
         "description": "This will delete and recreate the Ampæra dashboard with the latest entity IDs. Use this if the dashboard shows 'Entity not found' errors after upgrading the integration.\n\n**Click Submit to regenerate the dashboard.**"
+      },
+      "entity_browser": {
+        "title": "Entity Browser",
+        "description": "Overview of synced entities and what they are used for in the Ampæra system.\n\n{entity_table}"
+      },
+      "sensor_streams": {
+        "title": "Sensor Streams (Data Lab)",
+        "description": "Select which Home Assistant sensor entities to forward to the Ampæra Data Lab for custom graphing. Push interval controls how often values are sent.",
+        "data": {
+          "sensor_stream_entities": "Sensors to stream",
+          "sensor_stream_interval": "Push interval (seconds)"
+        },
+        "data_description": {
+          "sensor_stream_entities": "Water heater temp, EV charge current, room temperatures, etc.",
+          "sensor_stream_interval": "How often to push sensor values to Ampæra (30–3600s)"
+        }
       }
     },
     "abort": {

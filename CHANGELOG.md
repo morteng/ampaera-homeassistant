@@ -5,6 +5,31 @@ All notable changes to the Ampæra Home Assistant integration.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-03-15
+
+### Added
+- **Data Lab Sensor Streams**: Push arbitrary HA sensor entities to Ampæra cloud for Data Lab visualization
+  - New "Sensor Streams" options flow step: select any numeric HA sensor to forward
+  - Configurable push interval (30–3600 seconds, default 60s)
+  - MQTT publish to `telemetry/{site_id}/sensor-streams` topic
+  - Enables multi-signal comparison charts in Data Lab (power + temperature + current etc.)
+- **Entity Browser**: New options flow step to browse and map HA entities with usage categories
+
+### Compatibility
+- Home Assistant: 2024.1.0+
+- Ampæra API: v0.33.0+
+
+## [1.7.0] - 2026-03-10
+
+### Added
+- **Entity Browser Options Flow**: Browse all HA entities with usage category mapping
+  - Categorize entities by usage type (power meter, temperature, EV charger, etc.)
+  - Entity mappings stored in integration options for device sync
+
+### Compatibility
+- Home Assistant: 2024.1.0+
+- Ampæra API: v0.33.0+
+
 ## [1.6.3] - 2026-03-02
 
 ### Fixed

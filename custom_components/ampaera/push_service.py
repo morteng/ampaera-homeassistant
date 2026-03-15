@@ -29,7 +29,14 @@ from homeassistant.const import (
 from homeassistant.core import Event, callback
 from homeassistant.helpers.event import async_track_state_change_event
 
+from .const import (
+    CONF_SENSOR_STREAM_ENTITIES,
+    CONF_SENSOR_STREAM_INTERVAL,
+    DEFAULT_SENSOR_STREAM_INTERVAL,
+)
+
 if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant, State
 
     from .api import AmperaApiClient
@@ -79,6 +86,7 @@ class AmperaTelemetryPushService:
         debounce_seconds: float = DEFAULT_DEBOUNCE_SECONDS,
         heartbeat_seconds: float = DEFAULT_HEARTBEAT_SECONDS,
         event_service: AmperaEventService | None = None,
+        config_entry: ConfigEntry | None = None,
     ) -> None:
         """Initialize the push service.
 
@@ -90,6 +98,7 @@ class AmperaTelemetryPushService:
             debounce_seconds: Seconds to wait before pushing batched changes
             heartbeat_seconds: Seconds between periodic heartbeat pushes
             event_service: Optional event service for state change reporting
+            config_entry: Config entry for accessing options (sensor streams)
         """
         self._hass = hass
         self._api = api_client
@@ -98,6 +107,7 @@ class AmperaTelemetryPushService:
         self._debounce_seconds = debounce_seconds
         self._heartbeat_seconds = heartbeat_seconds
         self._event_service = event_service
+        self._config_entry = config_entry
 
         # Pending readings to push (keyed by device_id to dedupe)
         # Each device accumulates readings from multiple entities
@@ -109,6 +119,9 @@ class AmperaTelemetryPushService:
 
         # Heartbeat timer for periodic push
         self._heartbeat_task: asyncio.Task | None = None
+
+        # Sensor stream publisher task
+        self._sensor_stream_task: asyncio.Task | None = None
 
         # Unsubscribe callback
         self._unsubscribe: callable | None = None
@@ -226,6 +239,14 @@ class AmperaTelemetryPushService:
             self._run_heartbeat(), "ampaera_telemetry_heartbeat"
         )
 
+        # Start sensor stream publisher if entities are configured
+        if self._config_entry is not None:
+            entity_ids = self._config_entry.options.get(CONF_SENSOR_STREAM_ENTITIES, [])
+            if entity_ids:
+                self._sensor_stream_task = self._hass.async_create_background_task(
+                    self._run_sensor_stream_publisher(), "ampaera_sensor_stream_publisher"
+                )
+
     async def async_stop(self) -> None:
         """Stop the push service."""
         if not self._running:
@@ -239,6 +260,13 @@ class AmperaTelemetryPushService:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._heartbeat_task
             self._heartbeat_task = None
+
+        # Cancel sensor stream publisher
+        if self._sensor_stream_task:
+            self._sensor_stream_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._sensor_stream_task
+            self._sensor_stream_task = None
 
         # Cancel debounce timer
         if self._debounce_task:
@@ -400,6 +428,72 @@ class AmperaTelemetryPushService:
         """Wait for debounce period then push."""
         await asyncio.sleep(self._debounce_seconds)
         await self._flush_pending()
+
+    async def _run_sensor_stream_publisher(self) -> None:
+        """Periodically push selected sensor stream entities via MQTT to Ampæra Data Lab."""
+        interval = (
+            self._config_entry.options.get(CONF_SENSOR_STREAM_INTERVAL, DEFAULT_SENSOR_STREAM_INTERVAL)
+            if self._config_entry is not None
+            else DEFAULT_SENSOR_STREAM_INTERVAL
+        )
+        _LOGGER.info(
+            "Sensor stream publisher started (interval: %ds)", interval
+        )
+        while self._running:
+            await asyncio.sleep(interval)
+            if not self._running:
+                break
+            await self._push_sensor_streams()
+
+    async def _push_sensor_streams(self) -> None:
+        """Push selected sensor stream entities to Ampæra Data Lab via MQTT."""
+        import json
+        from datetime import UTC, datetime
+
+        if self._config_entry is None:
+            return
+
+        entity_ids = self._config_entry.options.get(CONF_SENSOR_STREAM_ENTITIES, [])
+        if not entity_ids:
+            return
+
+        readings = []
+        for entity_id in entity_ids:
+            state = self._hass.states.get(entity_id)
+            if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                continue
+            try:
+                value = float(state.state)
+            except (ValueError, TypeError):
+                continue
+            unit = state.attributes.get(ATTR_UNIT_OF_MEASUREMENT, "")
+            readings.append({"entity_id": entity_id, "value": value, "unit": unit})
+
+        if not readings:
+            return
+
+        topic = f"telemetry/{self._site_id}/sensor-streams"
+        payload = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "readings": readings,
+        }
+        try:
+            from homeassistant.components import mqtt
+
+            await mqtt.async_publish(
+                hass=self._hass,
+                topic=topic,
+                payload=json.dumps(payload),
+                qos=1,
+                retain=False,
+            )
+            _LOGGER.debug(
+                "Pushed %d sensor stream readings for site %s",
+                len(readings),
+                self._site_id,
+            )
+        except Exception as err:
+            _LOGGER.warning("Failed to push sensor streams: %s", err)
 
     async def _run_heartbeat(self) -> None:
         """Periodically push current states regardless of changes.

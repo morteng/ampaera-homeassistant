@@ -91,7 +91,9 @@
           "reauth": "Autentiser på nytt",
           "manage_devices": "Administrer enheter",
           "regenerate_dashboard": "Regenerer dashboard",
-          "settings": "Innstillinger"
+          "entity_browser": "Entitetsoversikt",
+          "settings": "Innstillinger",
+          "sensor_streams": "Sensor-strømmer"
         }
       },
       "check_connection": {
@@ -142,6 +144,22 @@
       "regenerate_dashboard": {
         "title": "Regenerer dashboard",
         "description": "Dette vil slette og opprette Ampæra-dashboardet på nytt med oppdaterte entitets-IDer. Bruk dette hvis dashboardet viser «Entitet ikke funnet»-feil etter oppgradering av integrasjonen.\n\n**Klikk Send for å regenerere dashboardet.**"
+      },
+      "entity_browser": {
+        "title": "Entitetsoversikt",
+        "description": "Oversikt over synkroniserte entiteter og hva de brukes til i Ampæra-systemet.\n\n{entity_table}"
+      },
+      "sensor_streams": {
+        "title": "Sensor-strømmer (Data Lab)",
+        "description": "Velg hvilke Home Assistant-sensorer som skal sendes til Ampæra Data Lab for egendefinerte grafer. Sendingsintervall styrer hvor ofte verdiene sendes.",
+        "data": {
+          "sensor_stream_entities": "Sensorer å sende",
+          "sensor_stream_interval": "Sendingsintervall (sekunder)"
+        },
+        "data_description": {
+          "sensor_stream_entities": "Varmtvannstemp, elbillader-strøm, romtemperaturer osv.",
+          "sensor_stream_interval": "Hvor ofte sensordataene sendes til Ampæra (30–3600s)"
+        }
       }
     },
     "abort": {
