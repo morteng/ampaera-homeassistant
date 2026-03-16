@@ -613,6 +613,31 @@ class AmperaDeviceDiscovery:
 
         return AmperaDeviceType.SENSOR
 
+    @staticmethod
+    def _entity_has_better_value(
+        candidate: State, current_entity_id: str, all_entities: list[State]
+    ) -> bool:
+        """Check if candidate entity has a better (non-zero) value than the current one.
+
+        Used for multi-channel devices (e.g. Refoss EM16) where multiple entities
+        map to the same capability but only one channel has an active CT clamp.
+        """
+        try:
+            candidate_val = float(candidate.state)
+        except (ValueError, TypeError):
+            return False
+        if candidate_val == 0.0:
+            return False
+        # Candidate is non-zero; check if current entity reads zero
+        for entity in all_entities:
+            if entity.entity_id == current_entity_id:
+                try:
+                    current_val = float(entity.state)
+                    return current_val == 0.0
+                except (ValueError, TypeError):
+                    return True
+        return False
+
     def _analyze_entity_capability(
         self, state: State
     ) -> tuple[AmperaCapability | None, str | None]:
@@ -1010,9 +1035,13 @@ class AmperaDeviceDiscovery:
         for state in entities:
             capability, device_class = self._analyze_entity_capability(state)
             if capability:
-                # Avoid duplicate capabilities
                 if capability not in capabilities:
                     capabilities.append(capability)
+                    entity_mapping[capability.value] = state.entity_id
+                elif self._entity_has_better_value(state, entity_mapping.get(capability.value, ""), entities):
+                    # Multi-channel devices (e.g. Refoss EM16 with A1/B1 channels)
+                    # may have duplicate capabilities — prefer the entity with
+                    # a non-zero reading over one reading zero.
                     entity_mapping[capability.value] = state.entity_id
 
                 # Track power entities for primary selection
@@ -1237,9 +1266,12 @@ class AmperaDeviceDiscovery:
         best_power_entity: str = ""
         best_consumption_entity: str = ""
 
+        all_states = [s for s, _ in entities]
         for state, capability in entities:
             if capability not in capabilities:
                 capabilities.append(capability)
+                entity_mapping[capability.value] = state.entity_id
+            elif self._entity_has_better_value(state, entity_mapping.get(capability.value, ""), all_states):
                 entity_mapping[capability.value] = state.entity_id
 
             # Track power entities for primary selection
