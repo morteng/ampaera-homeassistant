@@ -313,6 +313,13 @@ class AmperaDeviceSyncService:
                 selected_devices.append(device)
                 continue
 
+            # Check 1b: Channel-split device — match on parent ID prefix
+            if "__ch_" in device.ha_device_id:
+                base_id = device.ha_device_id.split("__ch_")[0]
+                if base_id in self._selected_device_ids:
+                    selected_devices.append(device)
+                    continue
+
             # Check 2: Match on primary_entity_id (legacy entity-based selection)
             if device.primary_entity_id in self._selected_device_ids:
                 selected_devices.append(device)

@@ -638,6 +638,135 @@ class AmperaDeviceDiscovery:
                     return True
         return False
 
+    @staticmethod
+    def _extract_channel_ids(entity_ids: list[str]) -> dict[str, str]:
+        """Extract channel identifiers from a set of entity IDs that share a capability.
+
+        Given ["sensor.em16_a1_power", "sensor.em16_b1_power"], identifies the
+        differing underscore-delimited segment(s) (a1, b1) by comparing each
+        position across all entity name portions (after stripping the domain prefix).
+
+        All entity IDs must have the same segment count for clean extraction.
+        If not (asymmetric naming), falls back to index-based naming.
+
+        Returns:
+            Dict mapping entity_id -> channel_id (e.g., "a1", "b1").
+            Falls back to index-based naming ("ch_1", "ch_2") if extraction fails.
+        """
+        if len(entity_ids) < 2:
+            return {entity_ids[0]: "ch_1"} if entity_ids else {}
+
+        # Strip domain prefix (sensor., switch., etc.)
+        names = [eid.split(".", 1)[1] if "." in eid else eid for eid in entity_ids]
+
+        # Split into underscore-delimited segments
+        segmented = [name.split("_") for name in names]
+
+        # All names must have the same segment count for clean extraction;
+        # asymmetric naming (e.g. "device_power" vs "device_aux_power") falls back.
+        if len({len(s) for s in segmented}) > 1:
+            return {eid: f"ch_{i + 1}" for i, eid in enumerate(entity_ids)}
+
+        num_segs = len(segmented[0])
+
+        # Find segment positions where values differ across entities
+        differing_positions = [
+            i for i in range(num_segs) if len({s[i] for s in segmented}) > 1
+        ]
+
+        if not differing_positions:
+            return {eid: f"ch_{i + 1}" for i, eid in enumerate(entity_ids)}
+
+        # Build channel ID from all differing segment positions
+        channel_ids: dict[str, str] = {}
+        for eid, segs in zip(entity_ids, segmented, strict=True):
+            parts = [segs[pos] for pos in differing_positions]
+            cid = "_".join(parts).lower()
+            channel_ids[eid] = cid
+
+        # Validate: if any channel ID is empty, fall back to index-based
+        if any(not cid for cid in channel_ids.values()):
+            return {eid: f"ch_{i + 1}" for i, eid in enumerate(entity_ids)}
+
+        return channel_ids
+
+    def _split_into_channels(
+        self, entities: list[State]
+    ) -> list[tuple[str | None, list[State]]]:
+        """Split a device's entities into per-channel groups.
+
+        Detects multi-channel devices by finding capabilities that map to
+        multiple entities. Returns a list of (channel_id, entities) tuples.
+
+        For single-channel devices, returns [(None, entities)] unchanged.
+
+        Args:
+            entities: All HA State objects for one parent device.
+
+        Returns:
+            List of (channel_id, channel_entities) tuples.
+            channel_id is None for single-channel devices.
+        """
+        # Step 1: Collect all entities per capability
+        capability_entities: dict[str, list[State]] = {}
+
+        for state in entities:
+            capability, _ = self._analyze_entity_capability(state)
+            if capability:
+                cap_key = capability.value
+                capability_entities.setdefault(cap_key, []).append(state)
+
+        # Step 2: Check if any capability has multiple entities
+        multi_cap = {
+            cap: ents for cap, ents in capability_entities.items() if len(ents) > 1
+        }
+
+        if not multi_cap:
+            # Single-channel device — no splitting needed
+            return [(None, entities)]
+
+        # Step 3: Build direct entity_id → channel_id map from ALL multi-cap sets
+        direct_map: dict[str, str] = {}
+        for _cap, ents in multi_cap.items():
+            cap_ids = [e.entity_id for e in ents]
+            cap_channels = self._extract_channel_ids(cap_ids)
+            direct_map.update(cap_channels)
+
+        channels: dict[str, list[State]] = {ch_id: [] for ch_id in set(direct_map.values())}
+        shared_entities: list[State] = []
+
+        for state in entities:
+            if state.entity_id in direct_map:
+                # Entity was in a multi-capability set — assigned directly
+                channels[direct_map[state.entity_id]].append(state)
+            else:
+                # Entity has a unique capability — try token matching, else shared
+                entity_name = state.entity_id.split(".", 1)[1] if "." in state.entity_id else state.entity_id
+                entity_name_lower = entity_name.lower()
+
+                matched_channel = None
+                for ch_id in channels:
+                    token = ch_id.lower()
+                    if (
+                        f"_{token}_" in entity_name_lower
+                        or entity_name_lower.startswith(f"{token}_")
+                        or entity_name_lower.endswith(f"_{token}")
+                        or entity_name_lower == token
+                    ):
+                        matched_channel = ch_id
+                        break
+
+                if matched_channel:
+                    channels[matched_channel].append(state)
+                else:
+                    shared_entities.append(state)
+
+        # Add shared entities to all channels
+        for ch_id in channels:
+            channels[ch_id].extend(shared_entities)
+
+        return [(ch_id, ch_entities) for ch_id, ch_entities in sorted(channels.items())]
+
     def _analyze_entity_capability(
         self, state: State
     ) -> tuple[AmperaCapability | None, str | None]:
@@ -891,13 +1020,33 @@ class AmperaDeviceDiscovery:
                 # Entity without parent device - treat as standalone
                 orphan_entities.append(state)
 
-        # Step 2: Build DiscoveredDevice per parent device
+        # Step 2: Build DiscoveredDevice per parent device (with channel splitting)
         devices: list[DiscoveredDevice] = []
 
         for device_id, entities in device_entities.items():
-            device = self._build_device_from_entities(device_id, entities)
-            if device:
-                devices.append(device)
+            channel_groups = self._split_into_channels(entities)
+
+            if len(channel_groups) == 1 and channel_groups[0][0] is None:
+                # Single-channel device — build as before
+                device = self._build_device_from_entities(device_id, entities)
+                if device:
+                    devices.append(device)
+            else:
+                # Multi-channel device — build one device per channel
+                _LOGGER.info(
+                    "Multi-channel device detected: %s with %d channels",
+                    device_id,
+                    len(channel_groups),
+                )
+                for ch_id, ch_entities in channel_groups:
+                    assert ch_id is not None  # guaranteed in multi-channel branch
+                    synthetic_id = f"{device_id}__ch_{ch_id}"
+                    device = self._build_device_from_entities(
+                        synthetic_id, ch_entities
+                    )
+                    if device:
+                        device.name = f"{device.name} ({ch_id.upper()})"
+                        devices.append(device)
 
         # Step 3: Handle orphan entities - GROUP by type instead of individual devices
         # This creates virtual parent devices for orphan sensors of the same type

@@ -5,6 +5,20 @@ All notable changes to the Ampæra Home Assistant integration.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-03-30
+
+### Added
+- **Multi-Channel Device Support**: Devices with multiple channels (Refoss EM16, Shelly 3EM, multi-endpoint Zigbee) now produce one Ampæra device per channel instead of flattening to a single device
+  - Channel IDs auto-detected from entity naming patterns (e.g., A1/B1, channel_1/channel_2)
+  - All channels created, including those reading zero (no CT clamp)
+  - Shared entities (e.g., device-wide temperature) distributed to all channels
+  - Sync filter updated to match channel-split device IDs via parent prefix
+- **Channel ID Extraction**: New `_extract_channel_ids` static method using segment-based comparison for robust channel detection across device types
+
+### Compatibility
+- Home Assistant: 2024.1.0+
+- Ampæra API: v0.33.0+
+
 ## [1.8.0] - 2026-03-15
 
 ### Added
