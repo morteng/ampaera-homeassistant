@@ -5,6 +5,21 @@ All notable changes to the Ampæra Home Assistant integration.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-04-11
+
+### Changed
+- **Discovery Pipeline v2.0**: Replaced monolithic `device_discovery.py` with modular `discovery/` package comprising four stages: entity scanning, capability analysis, device classification, and channel splitting.
+- **DiscoveryOrchestrator**: New orchestrator runs the full pipeline with timing diagnostics and structured `DiscoveryReport`.
+- **HA Repairs Integration**: Discovery issues (auto-enabled entities, unmapped entities) now surface as HA Repair issues with Norwegian and English translations.
+- **Diagnostics**: Discovery report data included in HA diagnostics export for troubleshooting.
+
+### Deprecated
+- `device_discovery.py` is deprecated. Use `from .discovery import DiscoveryOrchestrator` instead.
+
+### Compatibility
+- Home Assistant: 2024.1.0+
+- Ampæra API: v0.33.0+
+
 ## [1.9.1] - 2026-04-11
 
 ### Fixed

@@ -1,4 +1,13 @@
-"""Device discovery service for Ampæra HA integration.
+"""DEPRECATED: Use discovery package instead (discovery/__init__.py).
+
+This module is kept for backward compatibility during the v2.0 migration.
+All new code should import from ``discovery`` package:
+    from .discovery import DiscoveryOrchestrator
+    from .discovery.models import DiscoveredDevice, AmperaCapability, AmperaDeviceType
+
+Original docstring:
+
+Device discovery service for Ampæra HA integration.
 
 Discovers Home Assistant devices suitable for syncing to Ampæra:
 - Power/energy sensors (AMS meters, smart plugs)

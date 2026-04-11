@@ -94,7 +94,7 @@ from .const import (
     SIMULATION_PROFILES,
     SIMULATION_WH_TYPES,
 )
-from .device_discovery import AmperaDeviceDiscovery
+from .discovery import DiscoveryOrchestrator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -355,8 +355,8 @@ class AmperaOAuth2FlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
             return await self._async_register_and_complete()
 
         # Discover devices
-        discovery = AmperaDeviceDiscovery(self.hass)
-        self._discovered_devices = discovery.discover_devices()
+        discovery = DiscoveryOrchestrator(self.hass)
+        self._discovered_devices, _ = discovery.discover()
 
         if not self._discovered_devices:
             # No devices found - show informational message but allow continuing
@@ -499,8 +499,12 @@ class AmperaOAuth2FlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
             # Prepare device data for registration
             # In simulation mode, no devices are selected - simulation creates them
             if self._selected_entities:
-                discovery = AmperaDeviceDiscovery(self.hass)
-                devices_to_register = discovery.get_devices_by_ids(self._selected_entities)
+                discovery = DiscoveryOrchestrator(self.hass)
+                all_devices, _ = discovery.discover()
+                selected_ids = set(self._selected_entities)
+                devices_to_register = [
+                    d for d in all_devices if d.ha_device_id in selected_ids
+                ]
                 device_data = [d.to_dict() for d in devices_to_register]
             else:
                 device_data = []
@@ -843,8 +847,8 @@ class AmperaOptionsFlow(OptionsFlow):
         device_options = []
 
         if not is_simulation:
-            discovery = AmperaDeviceDiscovery(self.hass)
-            self._discovered_devices = discovery.discover_devices()
+            discovery = DiscoveryOrchestrator(self.hass)
+            self._discovered_devices, _ = discovery.discover()
 
             # Build options list from discovered devices
             for device in self._discovered_devices:

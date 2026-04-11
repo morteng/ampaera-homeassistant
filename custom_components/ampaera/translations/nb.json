@@ -169,5 +169,15 @@
   },
   "application_credentials": {
     "description": "Ampæra Energy bruker OAuth for sikker autentisering. Klikk **Legg til** for å koble til Ampæra-kontoen din."
+  },
+  "issues": {
+    "entities_auto_enabled": {
+      "title": "Ampæra aktiverte {count} sensorer",
+      "description": "Følgende sensorer var deaktivert av sine integrasjoner og ble automatisk aktivert for datainnsamling: {entities}"
+    },
+    "unmapped_entities": {
+      "title": "{count} entiteter kunne ikke mappes",
+      "description": "Følgende entiteter har en kjent enhetsklasse men kunne ikke mappes til en Ampæra-kapabilitet: {entities}"
+    }
   }
 }

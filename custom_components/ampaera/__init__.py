@@ -261,6 +261,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "push_service": push_service,
         "command_service": command_service,
         "device_sync_service": device_sync_service,
+        "discovery_orchestrator": device_sync_service._discovery,
         "event_service": event_service,
         "site_id": site_id,
         "site_name": site_name,

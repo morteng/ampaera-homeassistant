@@ -19,7 +19,8 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_time_interval
 
 from .const import DEFAULT_DEVICE_SYNC_INTERVAL
-from .device_discovery import AmperaDeviceDiscovery, DiscoveredDevice
+from .discovery import DiscoveryOrchestrator
+from .discovery.models import DiscoveredDevice, DiscoveryReport
 from .push_service import EntityMapping
 
 if TYPE_CHECKING:
@@ -75,7 +76,7 @@ class AmperaDeviceSyncService:
         installation_mode = entry.data.get("installation_mode", "real")
         simulation_mode = installation_mode == "simulation"
 
-        self._discovery = AmperaDeviceDiscovery(hass, simulation_mode=simulation_mode)
+        self._discovery = DiscoveryOrchestrator(hass, simulation_mode=simulation_mode)
         self._unsub_timer: asyncio.TimerHandle | None = None
         self._running = False
         # Maps ha_device_id → ampera_device_id
@@ -96,6 +97,11 @@ class AmperaDeviceSyncService:
     def entity_mappings(self) -> dict[str, EntityMapping]:
         """Return entity mappings for telemetry push."""
         return self._entity_mappings
+
+    @property
+    def last_report(self) -> DiscoveryReport | None:
+        """Return the last discovery report."""
+        return getattr(self, "_last_report", None)
 
     def register_sync_callback(self, callback: SyncCallback) -> None:
         """Register a callback to be called after each sync.
@@ -197,7 +203,8 @@ class AmperaDeviceSyncService:
 
         try:
             # Discover all devices (grouped by parent device_id)
-            all_devices = self._discovery.discover_devices()
+            all_devices, report = self._discovery.discover()
+            self._last_report = report
 
             # Filter to selected devices
             # Support both device IDs (new) and entity IDs (legacy config)
@@ -255,6 +262,11 @@ class AmperaDeviceSyncService:
             # Auto-enable disabled entities that belong to synced devices
             # This ensures data flows for all discovered capabilities
             await self._auto_enable_disabled_entities(selected_devices)
+
+            # Create/clear HA Repair issues based on discovery report
+            from .repairs import async_create_repair_issues
+
+            await async_create_repair_issues(self._hass, report)
 
             # Invoke sync callbacks to notify other services of updated mappings
             for cb in self._sync_callbacks:

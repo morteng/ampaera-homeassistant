@@ -169,5 +169,15 @@
   },
   "application_credentials": {
     "description": "Ampæra Energy uses OAuth for secure authentication. Click **Add** to connect your Ampæra account."
+  },
+  "issues": {
+    "entities_auto_enabled": {
+      "title": "Ampæra enabled {count} sensors",
+      "description": "The following sensors were disabled by their integrations and were automatically enabled for data collection: {entities}"
+    },
+    "unmapped_entities": {
+      "title": "{count} entities could not be mapped",
+      "description": "The following entities have a known device class but could not be mapped to an Ampæra capability: {entities}"
+    }
   }
 }

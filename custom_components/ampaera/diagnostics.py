@@ -68,6 +68,7 @@ async def async_get_config_entry_diagnostics(
     push_service = None
     command_service = None
     device_sync_service = None
+    entry_data = None
 
     if DOMAIN in hass.data and config_entry.entry_id in hass.data[DOMAIN]:
         entry_data = hass.data[DOMAIN][config_entry.entry_id]
@@ -165,6 +166,37 @@ async def async_get_config_entry_diagnostics(
             "sync_interval_seconds": getattr(device_sync_service, "_sync_interval", None),
             "last_sync_success": getattr(device_sync_service, "_last_sync_success", None),
             "devices_synced": getattr(device_sync_service, "_devices_synced", 0),
+        }
+
+    # Add discovery report if available
+    discovery_orchestrator = (
+        entry_data.get("discovery_orchestrator") if isinstance(entry_data, dict) else None
+    )
+    if discovery_orchestrator and discovery_orchestrator.last_report:
+        report = discovery_orchestrator.last_report
+        diagnostics["discovery"] = {
+            "timestamp": report.timestamp.isoformat() if report.timestamp else None,
+            "duration_ms": report.duration_ms,
+            "entities": {
+                "total": report.total_entities_scanned,
+                "enabled": report.enabled_entities,
+                "disabled": report.disabled_entities,
+                "with_capability": report.entities_with_capability,
+                "without_capability": report.entities_without_capability,
+                "by_domain": report.entities_by_domain,
+                "by_platform": report.entities_by_platform,
+            },
+            "devices": {
+                "total": report.devices_found,
+                "by_type": report.devices_by_type,
+                "orphan_entities": report.orphan_entities,
+                "orphan_groups": report.orphan_groups_created,
+            },
+            "channel_splitting": {
+                "performed": report.channel_splits_performed,
+                "skipped": report.channel_splits_skipped,
+            },
+            "auto_enabled": report.auto_enabled_entities,
         }
 
     # Add Home Assistant info
