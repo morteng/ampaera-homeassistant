@@ -5,6 +5,14 @@ All notable changes to the Ampæra Home Assistant integration.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.1] - 2026-04-11
+
+### Fixed
+- **Entity Discovery**: Use HA entity registry instead of `hass.states` for discovery, finding ALL entities including those disabled by their source integration (e.g., Refoss EM16 entities disabled by default). Previously only ~1/3 of entities were visible.
+- **Channel Split False Positives**: Channel splitting now requires at least 2 duplicate capabilities AND clear channel naming patterns (a1/b1, 1/2, ch1/ch2). Prevents false splits on devices with accidentally duplicate capabilities.
+- **Synthetic Device ID Lookup**: `_get_device_info` now resolves synthetic channel IDs (`device_id__ch_a1`) to the real device ID before HA registry lookup, fixing missing device name/manufacturer/model for channel-split devices.
+- **Auto-Enable Disabled Entities**: Automatically enables entities that were disabled by their source integration (not by user choice) when they belong to synced Ampæra devices. Shows a persistent notification when entities are enabled. Requires one-time integration reload.
+
 ## [1.9.0] - 2026-03-30
 
 ### Added

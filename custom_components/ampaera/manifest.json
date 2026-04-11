@@ -1,6 +1,6 @@
 {
   "domain": "ampaera",
-  "name": "Amp\u00e6ra Energy",
+  "name": "Ampæra Energy",
   "codeowners": [
     "@morteng"
   ],
@@ -16,5 +16,5 @@
     "aiohttp>=3.9.0",
     "aiolimiter>=1.1.0"
   ],
-  "version": "1.9.0"
+  "version": "1.9.1"
 }

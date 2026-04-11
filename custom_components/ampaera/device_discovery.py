@@ -17,11 +17,12 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from homeassistant.core import State
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
 if TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant, State
+    from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -425,15 +426,32 @@ class AmperaDeviceDiscovery:
 
         return entity_entry.device_id
 
+    @staticmethod
+    def _resolve_base_device_id(device_id: str) -> str:
+        """Extract the real HA device ID from a possibly synthetic channel ID.
+
+        Synthetic IDs have the format "real_device_id__ch_channel_id".
+        Returns the base device_id for registry lookups.
+        """
+        if "__ch_" in device_id:
+            return device_id.split("__ch_")[0]
+        return device_id
+
     def _get_device_info(self, device_id: str) -> tuple[str | None, str | None, str | None]:
         """Get device info from device registry.
+
+        Handles synthetic channel IDs (e.g., "device_id__ch_a1") by
+        resolving to the base device ID before lookup.
 
         Returns tuple of (name, manufacturer, model), any may be None.
         """
         self._ensure_registries()
         assert self._device_registry is not None
 
-        device_entry = self._device_registry.async_get(device_id)
+        # Resolve synthetic channel IDs to real device IDs for registry lookup
+        lookup_id = self._resolve_base_device_id(device_id)
+
+        device_entry = self._device_registry.async_get(lookup_id)
         if device_entry is None:
             return None, None, None
 
@@ -690,6 +708,44 @@ class AmperaDeviceDiscovery:
 
         return channel_ids
 
+    @staticmethod
+    def _has_channel_pattern(entity_ids: list[str]) -> bool:
+        """Check if entity IDs show a clear multi-channel naming pattern.
+
+        Requires that the differing segments look like channel identifiers
+        (e.g., a1/b1, channel_1/channel_2, 1/2) rather than arbitrary text.
+        This prevents false channel splits on devices that just happen to have
+        two entities with the same capability but unrelated names.
+        """
+        if len(entity_ids) < 2:
+            return False
+
+        names = [eid.split(".", 1)[1] if "." in eid else eid for eid in entity_ids]
+        segmented = [name.split("_") for name in names]
+
+        # Must have same segment count for pattern-based detection
+        if len({len(s) for s in segmented}) > 1:
+            return False
+
+        num_segs = len(segmented[0])
+        differing_positions = [
+            i for i in range(num_segs) if len({s[i] for s in segmented}) > 1
+        ]
+
+        if not differing_positions:
+            return False
+
+        # Check that differing segments look like channel identifiers:
+        # short alphanumeric tokens (a1, b1, 1, 2, ch1, etc.)
+        for pos in differing_positions:
+            for segs in segmented:
+                token = segs[pos]
+                if len(token) > 4 or not any(c.isdigit() for c in token):
+                    # Token too long or has no digit — unlikely a channel ID
+                    return False
+
+        return True
+
     def _split_into_channels(
         self, entities: list[State]
     ) -> list[tuple[str | None, list[State]]]:
@@ -699,6 +755,11 @@ class AmperaDeviceDiscovery:
         multiple entities. Returns a list of (channel_id, entities) tuples.
 
         For single-channel devices, returns [(None, entities)] unchanged.
+
+        Safeguards against false splits:
+        - Requires at least 2 different capabilities with duplicates
+        - Entity names must show a clear channel pattern (a1/b1, 1/2, etc.)
+        - Single accidental duplicates do not trigger splitting
 
         Args:
             entities: All HA State objects for one parent device.
@@ -725,7 +786,32 @@ class AmperaDeviceDiscovery:
             # Single-channel device — no splitting needed
             return [(None, entities)]
 
-        # Step 3: Build direct entity_id → channel_id map from ALL multi-cap sets
+        # Step 3: Validate that this is truly a multi-channel device
+        # Require at least 2 capabilities with duplicates AND clear channel patterns
+        # A single duplicate capability is more likely a quirk than a real channel split
+        if len(multi_cap) < 2:
+            _LOGGER.debug(
+                "Only %d capability with duplicates — not enough evidence for channel split, "
+                "treating as single device (capabilities: %s)",
+                len(multi_cap),
+                list(multi_cap.keys()),
+            )
+            return [(None, entities)]
+
+        # Verify entity names show a channel-like pattern (a1/b1, 1/2, ch1/ch2)
+        has_pattern = any(
+            self._has_channel_pattern([e.entity_id for e in ents])
+            for ents in multi_cap.values()
+        )
+        if not has_pattern:
+            _LOGGER.debug(
+                "Duplicate capabilities found but no channel naming pattern detected — "
+                "treating as single device (capabilities: %s)",
+                list(multi_cap.keys()),
+            )
+            return [(None, entities)]
+
+        # Step 4: Build direct entity_id → channel_id map from ALL multi-cap sets
         direct_map: dict[str, str] = {}
         for _cap, ents in multi_cap.items():
             cap_ids = [e.entity_id for e in ents]
@@ -981,11 +1067,81 @@ class AmperaDeviceDiscovery:
 
         return None, None
 
+    def _get_all_entity_states(self) -> list[State]:
+        """Get states for all relevant entities, including disabled ones.
+
+        Uses the entity registry to discover ALL entities (including those
+        disabled by integration or user), not just those with active states.
+        For disabled entities, creates a synthetic State object using registry
+        metadata so they can be discovered and mapped.
+
+        This is critical for devices like Refoss EM16 where many entities are
+        disabled by default (entity_registry_enabled_default = False).
+        """
+        assert self._entity_registry is not None
+
+        # Start with all active states
+        active_states = {s.entity_id: s for s in self._hass.states.async_all()}
+        all_states: list[State] = []
+        enabled_count = 0
+        disabled_count = 0
+
+        for entry in self._entity_registry.entities.values():
+            entity_id = entry.entity_id
+            domain = entity_id.split(".")[0]
+
+            if domain not in SUPPORTED_DOMAINS:
+                continue
+
+            # Skip entities from excluded integrations
+            if entry.platform and entry.platform.lower() in EXCLUDED_INTEGRATIONS:
+                continue
+
+            if entity_id in active_states:
+                # Entity is enabled and has a state — use the real state
+                all_states.append(active_states[entity_id])
+                enabled_count += 1
+            elif entry.disabled_by is not None:
+                # Entity is disabled — create a synthetic State from registry info
+                # so it can still be discovered and mapped to capabilities
+                attrs: dict[str, str] = {}
+                if entry.device_class:
+                    attrs["device_class"] = entry.device_class
+                if entry.original_name:
+                    attrs["friendly_name"] = entry.original_name
+                elif entry.name:
+                    attrs["friendly_name"] = entry.name
+                if entry.unit_of_measurement:
+                    attrs["unit_of_measurement"] = entry.unit_of_measurement
+
+                synthetic_state = State(
+                    entity_id=entity_id,
+                    state="unavailable",
+                    attributes=attrs,
+                )
+                all_states.append(synthetic_state)
+                disabled_count += 1
+
+        if disabled_count > 0:
+            _LOGGER.info(
+                "Entity discovery: %d enabled, %d disabled (total %d relevant entities)",
+                enabled_count,
+                disabled_count,
+                enabled_count + disabled_count,
+            )
+
+        return all_states
+
     def discover_devices(self) -> list[DiscoveredDevice]:
         """Find all devices suitable for Ampæra sync.
 
         Groups entities by their parent device_id and returns one
         DiscoveredDevice per physical device with combined capabilities.
+
+        Uses entity registry to discover ALL entities including disabled ones,
+        following HA best practice of using async_entries_for_device() pattern.
+        This ensures devices like Refoss EM16 (which disable many entities by
+        default) are fully discovered.
 
         Note: All entity types are included (real hardware, templates, helpers)
         to support demo/development environments with simulated devices.
@@ -993,25 +1149,12 @@ class AmperaDeviceDiscovery:
         self._ensure_registries()
 
         # Step 1: Group entities by parent device_id
+        # Uses entity registry to find ALL entities (including disabled ones)
         device_entities: dict[str, list[State]] = {}
         orphan_entities: list[State] = []  # Entities without parent device
 
-        for state in self._hass.states.async_all():
+        for state in self._get_all_entity_states():
             entity_id = state.entity_id
-            domain = entity_id.split(".")[0]
-
-            if domain not in SUPPORTED_DOMAINS:
-                continue
-
-            # Skip entities from excluded integrations (e.g., ampaera_sim)
-            platform = self._get_entity_platform(entity_id)
-            if platform and platform.lower() in EXCLUDED_INTEGRATIONS:
-                _LOGGER.debug(
-                    "Skipping entity from excluded integration: %s (platform: %s)",
-                    entity_id,
-                    platform,
-                )
-                continue
 
             device_id = self._get_parent_device_id(entity_id)
             if device_id:

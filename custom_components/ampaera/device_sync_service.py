@@ -15,6 +15,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from homeassistant.core import Event, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_time_interval
 
 from .const import DEFAULT_DEVICE_SYNC_INTERVAL
@@ -83,6 +84,8 @@ class AmperaDeviceSyncService:
         self._entity_mappings: dict[str, EntityMapping] = {}
         # Callbacks to invoke after each sync
         self._sync_callbacks: list[SyncCallback] = []
+        # Track whether we've already auto-enabled entities (prevent reload loop)
+        self._entities_auto_enabled = False
 
     @property
     def device_id_mappings(self) -> dict[str, str]:
@@ -249,6 +252,10 @@ class AmperaDeviceSyncService:
                     removed,
                 )
 
+            # Auto-enable disabled entities that belong to synced devices
+            # This ensures data flows for all discovered capabilities
+            await self._auto_enable_disabled_entities(selected_devices)
+
             # Invoke sync callbacks to notify other services of updated mappings
             for cb in self._sync_callbacks:
                 try:
@@ -380,6 +387,88 @@ class AmperaDeviceSyncService:
                 )
 
         return entity_mappings
+
+    async def _auto_enable_disabled_entities(
+        self, devices: list[DiscoveredDevice]
+    ) -> None:
+        """Auto-enable disabled entities that belong to synced devices.
+
+        When device integrations (e.g., Refoss EM16) disable entities by default
+        via entity_registry_enabled_default=False, those entities won't have state
+        objects and telemetry won't flow. This method enables them so data can be
+        collected for all discovered capabilities.
+
+        Only enables entities disabled by the INTEGRATION — respects user choices.
+        Notifies the user via persistent notification when entities are enabled.
+        Only runs once per service lifetime to prevent reload loops.
+        """
+        if self._entities_auto_enabled:
+            return
+        self._entities_auto_enabled = True
+
+        entity_registry = er.async_get(self._hass)
+
+        # Collect all entity_ids referenced by synced devices
+        synced_entity_ids: set[str] = set()
+        for device in devices:
+            synced_entity_ids.update(device.entity_mapping.values())
+            if device.primary_entity_id:
+                synced_entity_ids.add(device.primary_entity_id)
+
+        enabled_entities: list[str] = []
+
+        for entity_id in synced_entity_ids:
+            entry = entity_registry.async_get(entity_id)
+            if entry is None:
+                continue
+
+            # Only auto-enable entities disabled by the source integration
+            # Never override user's explicit disable choice
+            if entry.disabled_by == er.RegistryEntryDisabler.INTEGRATION:
+                _LOGGER.info(
+                    "Auto-enabling entity %s (was disabled by integration %s)",
+                    entity_id,
+                    entry.platform,
+                )
+                entity_registry.async_update_entity(
+                    entity_id, disabled_by=None
+                )
+                enabled_entities.append(entity_id)
+
+        if enabled_entities:
+            _LOGGER.info(
+                "Auto-enabled %d entities for Ampæra sync: %s",
+                len(enabled_entities),
+                ", ".join(enabled_entities[:10]),
+            )
+            # Notify user via persistent notification
+            from homeassistant.components import persistent_notification
+
+            persistent_notification.async_create(
+                self._hass,
+                title="Ampæra: Entiteter aktivert",
+                message=(
+                    f"Ampæra har automatisk aktivert {len(enabled_entities)} "
+                    f"sensor-entiteter som var deaktivert av sine integrasjoner. "
+                    f"Dette sikrer at all telemetri-data kan samles inn.\n\n"
+                    f"Aktiverte entiteter: {', '.join(enabled_entities[:20])}"
+                    + (f"\n... og {len(enabled_entities) - 20} til"
+                       if len(enabled_entities) > 20 else "")
+                ),
+                notification_id="ampaera_entities_enabled",
+            )
+
+            # HA needs a reload for newly enabled entities to start producing states
+            # Schedule an integration reload after a short delay
+            async def _reload_after_enable() -> None:
+                import asyncio
+                await asyncio.sleep(5)
+                _LOGGER.info("Reloading integration after enabling disabled entities")
+                await self._hass.config_entries.async_reload(self._entry.entry_id)
+
+            self._hass.async_create_task(
+                _reload_after_enable(), name="ampaera_reload_after_enable"
+            )
 
     async def async_force_sync(self) -> tuple[dict[str, str], dict[str, EntityMapping]]:
         """Force an immediate device sync.
