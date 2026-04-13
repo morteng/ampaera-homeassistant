@@ -44,7 +44,7 @@
       },
       "devices": {
         "title": "Select Devices",
-        "description": "Pick which Home Assistant devices Ampæra should sync.\n\n**Found {total_count} devices in Home Assistant** — showing **{device_count}** for selection:\n- {energy_count} look energy-relevant ({hidden_count} non-energy devices hidden — cameras, HA add-ons, notifications, …)\n- {group_count} groups collapse {grouped_device_count} similar devices (e.g. multi-channel meters like em16 with 18 circuits)\n\n**Recommended** power meters, EV chargers and water heaters are pre-selected. Untick anything you'd rather leave out, then submit. You can change this later under **Options → Manage Devices**.",
+        "description": "Pick which Home Assistant devices Ampæra should sync.\n\n**{total_count} devices found in Home Assistant**\n- ✓ **{energy_count} energy-relevant** — shown below as **{device_count} picker rows**: {group_count} grouped meter(s) rolling up {grouped_device_count} channels, plus the rest as individual devices.\n- ✗ **{hidden_count} hidden** as non-energy (cameras, HA add-ons, notifications, motion sensors, …).\n\n**Recommended** power meters, EV chargers and water heaters are pre-selected. Untick anything you'd rather leave out, then submit. You can change this later under **Options → Manage Devices**.",
         "data": {
           "selected_entities": "Devices to sync"
         },
@@ -121,7 +121,7 @@
       },
       "manage_devices": {
         "title": "Manage Devices",
-        "description": "Select which devices Ampæra should sync.\n\n**{device_count} of {total_count} devices shown** — {hidden_count} non-energy devices hidden, {group_count} groups collapse {grouped_device_count} similar devices.\n\nTick **Show all devices** below to list every channel individually — useful for cherry-picking inside a grouped meter or including non-energy devices (cameras, HA add-ons, motion sensors, notifications). Items labelled *(grouped)* enable all member channels at once when ticked.",
+        "description": "Select which devices Ampæra should sync.\n\n**{total_count} devices in Home Assistant**\n- ✓ **{energy_count} energy-relevant**, shown as **{device_count} picker rows** ({group_count} grouped meter(s) rolling up {grouped_device_count} channels, the rest as individual devices).\n- ✗ **{hidden_count} hidden** as non-energy (cameras, HA add-ons, motion sensors, notifications).\n\nTick **Show all devices** below to list every channel individually — useful for cherry-picking inside a grouped meter or including non-energy devices. Items labelled *(grouped)* enable all member channels at once when ticked.",
         "data": {
           "selected_entities": "Devices to sync",
           "show_all_devices": "Show all devices (advanced)"

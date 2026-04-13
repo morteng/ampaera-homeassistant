@@ -141,24 +141,29 @@ def collapse_to_group_ids(
     selected: list[str],
     groups: list[DeviceGroup],
 ) -> list[str]:
-    """Collapse fully-selected groups back to their group ID.
+    """Collapse selected group members back to their group ID.
 
-    Used when rendering the form with a pre-existing selection: if every
-    member of a group is in ``selected``, the form should show the group
-    checked rather than leaving it unchecked with its members invisible.
+    Used when rendering the form with a pre-existing selection: when any
+    member of a group is in ``selected`` we replace **all** member IDs
+    with the single group ID. The picker can't show partial selection
+    on a group anyway — it's a single checkbox — so partial historical
+    selections (e.g. from before grouping existed, when the user had
+    cherry-picked 5 of 54 em16 channels) get promoted to "the whole
+    group is selected".
 
-    Devices that are not part of any group, or groups whose members are
-    only partially selected, pass through as raw device IDs. A partially-
-    selected group means the user has explicitly opted some members out,
-    which only happens through the "show all devices" advanced view.
+    Devices that are not part of any group pass through unchanged. The
+    inverse promotion is acceptable because re-saving the form will
+    persist the full member list, and toggling *Show all devices*
+    afterwards lets the user prune individual channels again.
     """
     selected_set = set(selected)
     consumed: set[str] = set()
     out: list[str] = []
     for group in groups:
-        if all(member_id in selected_set for member_id in group.member_ids):
+        member_ids = group.member_ids or []
+        if any(member_id in selected_set for member_id in member_ids):
             out.append(group.group_id)
-            consumed.update(group.member_ids)
+            consumed.update(member_ids)
     for sel in selected:
         if sel in consumed:
             continue

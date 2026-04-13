@@ -44,7 +44,7 @@
       },
       "devices": {
         "title": "Velg enheter",
-        "description": "Velg hvilke Home Assistant-enheter Ampæra skal synkronisere.\n\n**Fant {total_count} enheter i Home Assistant** — viser **{device_count}** for valg:\n- {energy_count} ser energi-relevante ut ({hidden_count} ikke-energienheter er skjult — kameraer, HA-tillegg, varsler …)\n- {group_count} grupper samler {grouped_device_count} like enheter (f.eks. flerkanals-målere som em16 med 18 kretser)\n\n**Anbefalte** strømmålere, elbilladere og varmtvannsberedere er forhåndsvalgt. Fjern haken på det du ikke vil ha med, og send inn. Du kan endre dette senere under **Alternativer → Administrer enheter**.",
+        "description": "Velg hvilke Home Assistant-enheter Ampæra skal synkronisere.\n\n**{total_count} enheter funnet i Home Assistant**\n- ✓ **{energy_count} energi-relevante** — vises nedenfor som **{device_count} valgrader**: {group_count} gruppert måler(e) som samler {grouped_device_count} kanaler, resten som individuelle enheter.\n- ✗ **{hidden_count} skjult** som ikke-energi (kameraer, HA-tillegg, varsler, bevegelsessensorer …).\n\n**Anbefalte** strømmålere, elbilladere og varmtvannsberedere er forhåndsvalgt. Fjern haken på det du ikke vil ha med, og send inn. Du kan endre dette senere under **Alternativer → Administrer enheter**.",
         "data": {
           "selected_entities": "Enheter å synkronisere"
         },
@@ -121,7 +121,7 @@
       },
       "manage_devices": {
         "title": "Administrer enheter",
-        "description": "Velg hvilke enheter Ampæra skal synkronisere.\n\n**{device_count} av {total_count} enheter vises** — {hidden_count} ikke-energienheter er skjult, {group_count} grupper samler {grouped_device_count} like enheter.\n\nHuk av **Vis alle enheter** nedenfor for å liste hver kanal individuelt — nyttig for å plukke kanaler inne i en gruppert måler eller inkludere ikke-energienheter (kameraer, HA-tillegg, bevegelsessensorer, varsler). Oppføringer merket *(gruppert)* aktiverer alle kanaler samtidig når de hukes av.",
+        "description": "Velg hvilke enheter Ampæra skal synkronisere.\n\n**{total_count} enheter i Home Assistant**\n- ✓ **{energy_count} energi-relevante**, vist som **{device_count} valgrader** ({group_count} gruppert måler(e) som samler {grouped_device_count} kanaler, resten som individuelle enheter).\n- ✗ **{hidden_count} skjult** som ikke-energi (kameraer, HA-tillegg, bevegelsessensorer, varsler).\n\nHuk av **Vis alle enheter** nedenfor for å liste hver kanal individuelt — nyttig for å plukke kanaler inne i en gruppert måler eller inkludere ikke-energienheter. Oppføringer merket *(gruppert)* aktiverer alle kanaler samtidig når de hukes av.",
         "data": {
           "selected_entities": "Enheter å synkronisere",
           "show_all_devices": "Vis alle enheter (avansert)"

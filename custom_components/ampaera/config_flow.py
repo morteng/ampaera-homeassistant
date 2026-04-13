@@ -1025,11 +1025,20 @@ class AmperaOptionsFlow(OptionsFlow):
 
         # Get currently selected devices, collapsing fully-selected groups
         # so the form shows one pre-checked group option instead of leaving
-        # its members invisible and unchecked.
+        # its members invisible and unchecked. Then filter to options the
+        # picker actually exposes — voluptuous validates the default list
+        # against the option set and crashes the form on the first stale
+        # ID (e.g. a device the user removed from HA, or a v2.1.0 picker
+        # selection that we now expect to be a group ID).
         stored_selected = list(entry_data.get(CONF_SELECTED_ENTITIES, []))
-        current_selected = collapse_to_group_ids(
-            stored_selected, self._manage_device_groups
-        )
+        valid_option_values = {opt["value"] for opt in device_options}
+        current_selected = [
+            value
+            for value in collapse_to_group_ids(
+                stored_selected, self._manage_device_groups
+            )
+            if value in valid_option_values
+        ]
 
         # For simulation mode, add simulated device options
         if is_simulation:
