@@ -28,10 +28,23 @@ GROUP_ID_PREFIX = "group:"
 # confusion than it saves.
 GROUP_MIN_SIZE = 3
 
-# Regex that strips trailing parenthetical suffixes like "(A1)", "(C6)",
-# "(CH_12)". These are channel/circuit identifiers that distinguish
-# sub-devices of the same physical meter.
-_TRAILING_SUFFIX_RE = re.compile(r"\s*\([^)]*\)\s*$")
+# Strip trailing channel/circuit identifiers from a device name so that
+# multi-channel meters cluster regardless of how the integration formats
+# their per-channel labels. We handle:
+#   - parenthetical: "em16 (A1)", "em16 (C6)", "em16 (CH_12)"
+#   - dash/underscore phase: "em16-phase-2", "em16_phase_2"
+#   - dash/underscore channel: "em16-CH3", "em16_ch_3"
+#   - dash/underscore bank+digit: "em16 A1", "em16-A1", "em16_C6"
+#   - trailing pure digits: "em16 1", "em16-2"
+# Patterns are applied iteratively so a name like "em16_phase_2 (A1)"
+# strips to "em16" via two rounds.
+_TRAILING_SUFFIX_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\s*\([^)]*\)\s*$"),                  # "(...)"
+    re.compile(r"[\s_-]*phase[\s_-]*\d+\s*$", re.I),  # "phase 2", "_phase_2"
+    re.compile(r"[\s_-]*ch(annel)?[\s_-]*\d+\s*$", re.I),  # "CH3", "channel 1"
+    re.compile(r"[\s_-]+[A-Z]\d{1,2}\s*$"),           # " A1", "_C6"
+    re.compile(r"[\s_-]+\d+\s*$"),                    # " 1", "-2"
+)
 
 
 @dataclass
@@ -50,9 +63,21 @@ class DeviceGroup:
 
 
 def _base_name(display: str) -> str:
-    """Strip a trailing parenthetical suffix from a display name."""
-    cleaned = _TRAILING_SUFFIX_RE.sub("", display).strip()
-    return cleaned
+    """Strip channel/circuit suffixes from a display name.
+
+    Iteratively applies known suffix patterns so multi-channel meters
+    with hybrid naming (parenthetical + suffix, etc.) collapse to the
+    same base. Stops when no further substitution shortens the name —
+    avoids infinite loops on degenerate inputs.
+    """
+    cleaned = display.strip()
+    for _ in range(4):
+        prev = cleaned
+        for pattern in _TRAILING_SUFFIX_PATTERNS:
+            cleaned = pattern.sub("", cleaned).strip()
+        if cleaned == prev or not cleaned:
+            break
+    return cleaned or display.strip()
 
 
 def _group_key(device: DiscoveredDevice) -> tuple[str, AmperaDeviceType, str, str]:

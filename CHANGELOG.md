@@ -5,6 +5,15 @@ All notable changes to the Ampæra Home Assistant integration.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.2] - 2026-04-13
+
+### Changed
+- **Wider grouping regex**: The discovery picker now also collapses multi-channel meters that use unparen channel suffixes — `em16 A1`, `em16_phase_2`, `em16-CH3`, `em16 1`, `em16-2` and similar variants now cluster with their parenthetical siblings into a single group. Previously the regex only handled `em16 (A1)` style, which meant real-world HA installs with hybrid naming kept devices scattered across the picker.
+
+### Compatibility
+- Home Assistant: 2024.1.0+
+- Ampæra API: v0.34.0+
+
 ## [2.2.1] - 2026-04-13
 
 ### Fixed
