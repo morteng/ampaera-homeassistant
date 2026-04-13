@@ -76,6 +76,7 @@ from .const import (
     CONF_POLLING_INTERVAL,
     CONF_SELECTED_ENTITIES,
     CONF_SENSOR_STREAM_ENTITIES,
+    CONF_SHOW_ALL_DEVICES,
     CONF_SENSOR_STREAM_INTERVAL,
     CONF_SIMULATION_HOUSEHOLD_PROFILE,
     CONF_SIMULATION_WATER_HEATER_TYPE,
@@ -94,7 +95,11 @@ from .const import (
     SIMULATION_PROFILES,
     SIMULATION_WH_TYPES,
 )
-from .discovery import DiscoveryOrchestrator
+from .discovery import (
+    AmperaDeviceType,
+    DiscoveredDevice,
+    DiscoveryOrchestrator,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -108,6 +113,61 @@ AUTH_METHODS = [
 def _generate_ha_instance_id() -> str:
     """Generate a unique HA instance ID."""
     return str(uuid.uuid4())[:12]
+
+
+# Norwegian display labels for device types, shown in the picker.
+_DEVICE_TYPE_LABELS: dict[AmperaDeviceType, str] = {
+    AmperaDeviceType.POWER_METER: "strømmåler",
+    AmperaDeviceType.EV_CHARGER: "elbillader",
+    AmperaDeviceType.WATER_HEATER: "varmtvannsbereder",
+    AmperaDeviceType.CLIMATE: "klima",
+    AmperaDeviceType.SENSOR: "sensor",
+    AmperaDeviceType.SWITCH: "bryter",
+}
+
+# Display order for grouping in the picker. Lower = shown first.
+_DEVICE_TYPE_ORDER: dict[AmperaDeviceType, int] = {
+    AmperaDeviceType.POWER_METER: 0,
+    AmperaDeviceType.EV_CHARGER: 1,
+    AmperaDeviceType.WATER_HEATER: 2,
+    AmperaDeviceType.CLIMATE: 3,
+    AmperaDeviceType.SENSOR: 4,
+    AmperaDeviceType.SWITCH: 5,
+}
+
+
+def _build_device_picker_options(
+    devices: list[DiscoveredDevice],
+    show_all: bool,
+) -> tuple[list[SelectOptionDict], list[str]]:
+    """Build picker options + recommended default selection.
+
+    Filters out non-energy devices unless ``show_all=True``, sorts by
+    device type (power meters first, switches last), and uses the
+    cleaned ``display_name()`` rather than the raw HA name.
+
+    Returns:
+        (options, default_selection) where default_selection contains
+        the IDs of the recommended-for-pre-selection devices.
+    """
+    visible = [d for d in devices if show_all or d.is_energy_relevant]
+    visible.sort(
+        key=lambda d: (
+            _DEVICE_TYPE_ORDER.get(d.device_type, 99),
+            d.display_name().lower(),
+        )
+    )
+
+    options: list[SelectOptionDict] = []
+    for device in visible:
+        type_label = _DEVICE_TYPE_LABELS.get(device.device_type, device.device_type.value)
+        sensor_count = len(device.capabilities)
+        sensor_word = "sensor" if sensor_count == 1 else "sensorer"
+        label = f"{device.display_name()} – {type_label}, {sensor_count} {sensor_word}"
+        options.append(SelectOptionDict(value=device.ha_device_id, label=label))
+
+    default_selection = [d.ha_device_id for d in visible if d.is_recommended]
+    return options, default_selection
 
 
 class AmperaOAuth2FlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
@@ -126,7 +186,7 @@ class AmperaOAuth2FlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
         self._site_name: str = "Home"
         self._grid_region: str = "NO1"
         self._ha_instance_id: str = _generate_ha_instance_id()
-        self._discovered_devices: list[dict] = []
+        self._discovered_devices: list[DiscoveredDevice] = []
         self._selected_entities: list[str] = []
         self._site_id: str | None = None
         self._device_mappings: dict[str, str] = {}
@@ -379,17 +439,18 @@ class AmperaOAuth2FlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
                 description_placeholders={"device_count": "0"},
             )
 
-        # Build device options (use ha_device_id for device-based selection)
-        device_options = [
-            SelectOptionDict(
-                value=device.ha_device_id,
-                label=f"{device.name} ({device.device_type.value}) - {len(device.capabilities)} sensors",
-            )
-            for device in self._discovered_devices
-        ]
-
-        # Pre-select all devices by default
-        default_selection = [d.ha_device_id for d in self._discovered_devices]
+        # Build filtered, sorted device options with smart pre-selection.
+        # During initial setup we hide non-energy devices by default —
+        # users with many smart-home devices (cameras, switches) get a
+        # focused list. They can opt in to the full list later via the
+        # "Manage devices" options flow.
+        device_options, default_selection = _build_device_picker_options(
+            self._discovered_devices,
+            show_all=False,
+        )
+        total_count = len(self._discovered_devices)
+        visible_count = len(device_options)
+        hidden_count = total_count - visible_count
 
         return self.async_show_form(
             step_id="devices",
@@ -405,7 +466,11 @@ class AmperaOAuth2FlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
                 }
             ),
             errors=errors,
-            description_placeholders={"device_count": str(len(self._discovered_devices))},
+            description_placeholders={
+                "device_count": str(visible_count),
+                "total_count": str(total_count),
+                "hidden_count": str(hidden_count),
+            },
         )
 
     async def async_step_simulation(
@@ -825,17 +890,38 @@ class AmperaOptionsFlow(OptionsFlow):
     async def async_step_manage_devices(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Manage which devices are synced to Ampæra."""
+        """Manage which devices are synced to Ampæra.
+
+        Real mode: respects the per-entry ``CONF_SHOW_ALL_DEVICES`` toggle
+        to either hide or show non-energy devices (cameras, etc.). Toggling
+        the checkbox and submitting persists the preference and re-renders
+        the form with the new filter applied.
+        """
         entry_data = self.config_entry.data
         installation_mode = entry_data.get(CONF_INSTALLATION_MODE, INSTALLATION_MODE_REAL)
         is_simulation = installation_mode == INSTALLATION_MODE_SIMULATION
+        current_show_all = bool(entry_data.get(CONF_SHOW_ALL_DEVICES, False))
 
         if user_input is not None:
-            # User submitted new device selection
+            # User submitted new device selection (and possibly toggled show_all).
             new_selected = user_input.get(CONF_SELECTED_ENTITIES, [])
+            new_show_all = bool(user_input.get(CONF_SHOW_ALL_DEVICES, False))
+
+            # If only the toggle changed, persist it and re-render the form
+            # so the new filter takes effect immediately.
+            if not is_simulation and new_show_all != current_show_all:
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry,
+                    data={**entry_data, CONF_SHOW_ALL_DEVICES: new_show_all},
+                )
+                return await self.async_step_manage_devices()
 
             # Update config entry data with new selection
-            new_data = {**entry_data, CONF_SELECTED_ENTITIES: new_selected}
+            new_data = {
+                **entry_data,
+                CONF_SELECTED_ENTITIES: new_selected,
+                CONF_SHOW_ALL_DEVICES: new_show_all,
+            }
             self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
 
             # The coordinator will pick up the change on next sync
@@ -844,20 +930,20 @@ class AmperaOptionsFlow(OptionsFlow):
             return self.async_create_entry(title="", data=self.config_entry.options)
 
         # Discover all available devices (only in real mode)
-        device_options = []
+        device_options: list[SelectOptionDict] = []
+        total_count = 0
+        hidden_count = 0
 
         if not is_simulation:
             discovery = DiscoveryOrchestrator(self.hass)
             self._discovered_devices, _ = discovery.discover()
+            total_count = len(self._discovered_devices)
 
-            # Build options list from discovered devices
-            for device in self._discovered_devices:
-                device_options.append(
-                    SelectOptionDict(
-                        value=device.ha_device_id,
-                        label=f"{device.name} ({device.device_type.value})",
-                    )
-                )
+            device_options, _ = _build_device_picker_options(
+                self._discovered_devices,
+                show_all=current_show_all,
+            )
+            hidden_count = total_count - len(device_options)
 
         # Get currently selected devices
         current_selected = list(entry_data.get(CONF_SELECTED_ENTITIES, []))
@@ -870,6 +956,7 @@ class AmperaOptionsFlow(OptionsFlow):
                 SelectOptionDict(value="sim_ev_charger", label="Simulated EV Charger"),
                 SelectOptionDict(value="sim_heat_pump", label="Simulated Heat Pump"),
             ]
+            total_count = len(device_options)
 
         if not device_options:
             # No devices available - show empty form with message
@@ -884,25 +971,44 @@ class AmperaOptionsFlow(OptionsFlow):
                                 mode=SelectSelectorMode.LIST,
                             )
                         ),
+                        vol.Optional(
+                            CONF_SHOW_ALL_DEVICES, default=current_show_all
+                        ): bool,
                     }
                 ),
-                description_placeholders={"device_count": "0"},
+                description_placeholders={
+                    "device_count": "0",
+                    "total_count": "0",
+                    "hidden_count": "0",
+                },
             )
+
+        schema_dict: dict[Any, Any] = {
+            vol.Optional(
+                CONF_SELECTED_ENTITIES, default=current_selected
+            ): SelectSelector(
+                SelectSelectorConfig(
+                    options=device_options,
+                    multiple=True,
+                    mode=SelectSelectorMode.LIST,
+                )
+            ),
+        }
+        # Only show the toggle in real mode — there's nothing to hide in
+        # simulation mode.
+        if not is_simulation:
+            schema_dict[
+                vol.Optional(CONF_SHOW_ALL_DEVICES, default=current_show_all)
+            ] = bool
 
         return self.async_show_form(
             step_id="manage_devices",
-            data_schema=vol.Schema(
-                {
-                    vol.Optional(CONF_SELECTED_ENTITIES, default=current_selected): SelectSelector(
-                        SelectSelectorConfig(
-                            options=device_options,
-                            multiple=True,
-                            mode=SelectSelectorMode.LIST,
-                        )
-                    ),
-                }
-            ),
-            description_placeholders={"device_count": str(len(device_options))},
+            data_schema=vol.Schema(schema_dict),
+            description_placeholders={
+                "device_count": str(len(device_options)),
+                "total_count": str(total_count),
+                "hidden_count": str(hidden_count),
+            },
         )
 
     async def async_step_regenerate_dashboard(

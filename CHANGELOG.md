@@ -5,6 +5,23 @@ All notable changes to the Ampæra Home Assistant integration.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-04-13
+
+### Added
+- **Energy-Relevance Filter**: Devices that are clearly not energy-related (cameras, microphones, motion detection, audio recording, notification toggles, doorbells) are now hidden from the device picker by default. Users with many smart-home devices (e.g. 261 devices, ~70% of which were camera switches) get a focused list.
+- **Smart Defaults**: Power meters (AMS, Tibber Pulse, Shelly, EM-style), EV chargers and water heaters are now pre-selected by default in the device picker. Generic sensors and switches remain visible but unselected so users opt in deliberately.
+- **Device Grouping**: The picker now sorts devices by category (power meters first, then EV chargers, water heaters, climate, sensors, switches) instead of a flat alphabetical list.
+- **AMS/OBIS Label Translation**: Cryptic codes like `MONTHUSE`, `PEAKS0-2`, `THRESHOLD`, `ACCUMULATED`, `PHASE1-3` are now translated to readable Norwegian labels (`Månedsforbruk`, `Topp 1 (denne måneden)`, `Effektgrense`, `Akkumulert forbruk (time)`, `Spenning fase 1`).
+- **Channel Suffix Stripping**: Redundant `(CH_1)`, `(CH_2)` channel codes are removed from device labels in the picker — they were noise from the channel splitter.
+- **"Show all devices" Toggle**: New checkbox in *Manage Devices* options flow lets advanced users opt into the unfiltered list when they need to control non-energy devices via Ampæra.
+
+### Changed
+- The initial device selection step now shows a focused, energy-only list with smart pre-selection. The full list is available later via *Manage Devices*.
+
+### Compatibility
+- Home Assistant: 2024.1.0+
+- Ampæra API: v0.33.0+
+
 ## [2.0.0] - 2026-04-11
 
 ### Changed

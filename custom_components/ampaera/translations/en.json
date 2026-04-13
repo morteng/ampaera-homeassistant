@@ -40,9 +40,9 @@
       },
       "devices": {
         "title": "Select Devices",
-        "description": "Choose which Home Assistant devices to sync with Ampæra. Found {device_count} compatible devices. You can continue without devices and add them later. Only real physical devices are shown.",
+        "description": "Choose which Home Assistant devices to sync with Ampæra. Showing {device_count} energy-relevant devices ({hidden_count} non-energy devices like cameras and notifications are hidden — you can show them later under Manage Devices). Recommended power meters, EV chargers and water heaters are pre-selected.",
         "data": {
-          "selected_entities": "Devices to sync (optional)"
+          "selected_entities": "Devices to sync"
         }
       },
       "simulation": {
@@ -114,9 +114,13 @@
       },
       "manage_devices": {
         "title": "Manage Devices",
-        "description": "Select which devices to sync with Ampæra. Found {device_count} available devices.",
+        "description": "Select which devices to sync with Ampæra. Showing {device_count} of {total_count} devices ({hidden_count} non-energy devices hidden). Toggle 'Show all devices' to include cameras, microphones, motion sensors and other non-energy devices.",
         "data": {
-          "selected_entities": "Devices to sync"
+          "selected_entities": "Devices to sync",
+          "show_all_devices": "Show all devices (advanced)"
+        },
+        "data_description": {
+          "show_all_devices": "Include cameras, microphones, notifications and other non-energy devices in the picker."
         }
       },
       "settings": {

@@ -278,3 +278,79 @@ SUPPORTED_DOMAINS: set[str] = {
     "switch",
     "climate",
 }
+
+# =============================================================================
+# Non-Energy Device Filter
+# =============================================================================
+# Substring patterns (lowercase) that indicate a device/entity is NOT relevant
+# to energy management. Used to mark devices as is_energy_relevant=False so
+# they're hidden from the default selection list. Users can still opt in via
+# the "show all devices" toggle.
+#
+# Detection is intentionally aggressive — false positives (a real water
+# heater hidden) are recoverable via the toggle, while false negatives
+# (Rolf's 180+ camera switches) drown the picker.
+
+NON_ENERGY_KEYWORDS: set[str] = {
+    # Camera-related
+    "camera",
+    "kamera",
+    "nightvision",
+    "rtsp",
+    "antitheft",
+    "motion detection",
+    "motion_detection",
+    "motion tracking",
+    "motion_tracking",
+    "pet detection",
+    "pet_detection",
+    "person detected",
+    "person_detected",
+    "crying detected",
+    "sound detected",
+    "indoor chime",
+    "indoor_chime",
+    "audio recording",
+    "audio_recording",
+    # Security / access
+    "doorbell",
+    "ringeklokke",
+    "alarm",
+    "siren",
+    "lock",
+    "unlock",
+    # Media / IO
+    "microphone",
+    "speaker",
+    "status led",
+    "status_led",
+    # Notifications
+    "notification",
+    "varsel",
+}
+
+# =============================================================================
+# Label Translation
+# =============================================================================
+# Map cryptic AMS / OBIS / vendor codes to human-readable labels.
+# Keys are uppercase suffixes found in entity friendly names, e.g. "MONTHUSE".
+# Used by the config flow to render readable device names.
+
+OBIS_LABEL_MAP: dict[str, str] = {
+    "MONTHUSE": "Månedsforbruk",
+    "DAYUSE": "Dagsforbruk",
+    "HOURUSE": "Timesforbruk",
+    "PEAKS0": "Topp 1 (denne måneden)",
+    "PEAKS1": "Topp 2 (denne måneden)",
+    "PEAKS2": "Topp 3 (denne måneden)",
+    "THRESHOLD": "Effektgrense",
+    "THRESHOLDS0": "Effektgrense trinn 1",
+    "THRESHOLDS1": "Effektgrense trinn 2",
+    "THRESHOLDS2": "Effektgrense trinn 3",
+    "THRESHOLDS3": "Effektgrense trinn 4",
+    "ACCUMULATED": "Akkumulert forbruk (time)",
+    "ESTIMATED": "Estimert forbruk (time)",
+    "PHASE1": "Spenning fase 1",
+    "PHASE2": "Spenning fase 2",
+    "PHASE3": "Spenning fase 3",
+}

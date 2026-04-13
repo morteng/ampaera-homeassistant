@@ -60,6 +60,9 @@ CONF_GRID_REGION: Final = "grid_region"
 # Configuration - Devices (v2.0 push architecture)
 CONF_DEVICE_MAPPINGS: Final = "device_mappings"
 CONF_SELECTED_ENTITIES: Final = "selected_entities"
+# Show non-energy devices (cameras, microphones, notifications) in the picker.
+# Off by default to keep the list focused for users with many smart devices.
+CONF_SHOW_ALL_DEVICES: Final = "show_all_devices"
 
 # Sensor streams (Data Lab)
 CONF_SENSOR_STREAM_ENTITIES: Final = "sensor_stream_entities"

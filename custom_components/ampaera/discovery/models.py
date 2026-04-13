@@ -7,6 +7,7 @@ and reporting.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
@@ -94,6 +95,43 @@ class DiscoveredDevice:
     primary_entity_id: str
     classification_reason: str
     channel_id: str | None = None
+    # Whether this device is relevant to energy management. Devices like
+    # camera switches, notification toggles, motion-detection sensors etc.
+    # are filtered out of the default selection list. Set to False to hide
+    # by default; users can opt in via the "show all devices" toggle.
+    is_energy_relevant: bool = True
+    # Whether this device should be pre-selected by default in the picker.
+    # True for AMS meters, EV chargers, water heaters, EM-style energy
+    # meters; False for ambiguous or supplementary devices.
+    is_recommended: bool = False
+
+    def display_name(self) -> str:
+        """Return a human-readable label for the device picker.
+
+        Strips redundant capability codes ("(MONTHUSE)", "(CH_1)", etc.)
+        from the raw HA name and translates known AMS/OBIS suffixes to
+        Norwegian labels via OBIS_LABEL_MAP.
+        """
+        # Local import to avoid circular dependency with signatures.
+        from .signatures import OBIS_LABEL_MAP
+
+        name = self.name
+
+        # Replace any "(CODE)" suffix with the human-readable label when known.
+        def _replace_code(match: "re.Match[str]") -> str:
+            code = match.group(1)
+            label = OBIS_LABEL_MAP.get(code.upper())
+            if label:
+                return f"({label})"
+            # CH_n channel suffixes: drop them — they're noise in the picker.
+            if re.match(r"^CH_\d+$", code, re.IGNORECASE):
+                return ""
+            return match.group(0)
+
+        cleaned = re.sub(r"\(([A-Za-z0-9_]+)\)", _replace_code, name)
+        # Collapse double spaces left by removed channel suffixes.
+        cleaned = re.sub(r"\s{2,}", " ", cleaned).strip()
+        return cleaned or name
 
     def to_dict(self) -> dict:
         """Convert to API format.

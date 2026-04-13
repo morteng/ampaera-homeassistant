@@ -19,7 +19,12 @@ from .models import (
     DiscoveredEntity,
     DiscoveryReport,
 )
-from .signatures import KEYWORDS, KNOWN_INTEGRATIONS, SEMANTIC_SIGNALS
+from .signatures import (
+    KEYWORDS,
+    KNOWN_INTEGRATIONS,
+    NON_ENERGY_KEYWORDS,
+    SEMANTIC_SIGNALS,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -190,7 +195,7 @@ class DeviceClassifier:
         if not device_name:
             device_name = entities[0].friendly_name or entities[0].entity_id
 
-        return DiscoveredDevice(
+        device = DiscoveredDevice(
             ha_device_id=device_id,
             name=device_name,
             device_type=device_type,
@@ -202,6 +207,9 @@ class DeviceClassifier:
             primary_entity_id=primary_entity_id,
             classification_reason=reason,
         )
+        device.is_energy_relevant = self._is_energy_relevant(device)
+        device.is_recommended = self._is_recommended(device)
+        return device
 
     # ------------------------------------------------------------------
     # 3-tier device type detection
@@ -551,7 +559,7 @@ class DeviceClassifier:
             device_type = AmperaDeviceType.SENSOR
             name = entities[0].friendly_name or entities[0].entity_id
 
-        return DiscoveredDevice(
+        device = DiscoveredDevice(
             ha_device_id=group_id,
             name=name,
             device_type=device_type,
@@ -563,3 +571,65 @@ class DeviceClassifier:
             primary_entity_id=primary_entity_id,
             classification_reason=f"orphan: {device_type.value}",
         )
+        device.is_energy_relevant = self._is_energy_relevant(device)
+        device.is_recommended = self._is_recommended(device)
+        return device
+
+    # ------------------------------------------------------------------
+    # Energy relevance & recommendation
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _is_energy_relevant(device: DiscoveredDevice) -> bool:
+        """Return True if the device looks relevant to energy management.
+
+        A device is considered non-energy when its name or any of its
+        entity names contain a keyword from NON_ENERGY_KEYWORDS (camera,
+        microphone, motion detection, notification, etc.) AND it has no
+        energy/power capabilities to back it up. Devices with real power
+        or energy capabilities always pass the filter, even if the name
+        accidentally matches a non-energy keyword.
+        """
+        energy_caps = {
+            AmperaCapability.POWER,
+            AmperaCapability.POWER_L1,
+            AmperaCapability.POWER_L2,
+            AmperaCapability.POWER_L3,
+            AmperaCapability.ENERGY,
+            AmperaCapability.ENERGY_IMPORT,
+            AmperaCapability.ENERGY_EXPORT,
+            AmperaCapability.ENERGY_HOUR,
+            AmperaCapability.ENERGY_DAY,
+            AmperaCapability.ENERGY_MONTH,
+            AmperaCapability.SESSION_ENERGY,
+            AmperaCapability.PEAK_MONTH_1,
+            AmperaCapability.PEAK_MONTH_2,
+            AmperaCapability.PEAK_MONTH_3,
+        }
+        if any(cap in energy_caps for cap in device.capabilities):
+            return True
+
+        name_parts = [device.name.lower()]
+        for entity in device.entities:
+            name_parts.append(entity.friendly_name.lower())
+            name_parts.append(entity.entity_id.lower())
+        haystack = " ".join(name_parts)
+
+        return not any(kw in haystack for kw in NON_ENERGY_KEYWORDS)
+
+    @staticmethod
+    def _is_recommended(device: DiscoveredDevice) -> bool:
+        """Return True if the device should be pre-selected by default.
+
+        We recommend pre-selecting devices that are unambiguously energy
+        infrastructure: power meters (AMS, Tibber, Shelly, EM-style),
+        EV chargers, and water heaters. Generic switches and sensors are
+        excluded so users opt in deliberately.
+        """
+        if not device.is_energy_relevant:
+            return False
+        return device.device_type in {
+            AmperaDeviceType.POWER_METER,
+            AmperaDeviceType.EV_CHARGER,
+            AmperaDeviceType.WATER_HEATER,
+        }

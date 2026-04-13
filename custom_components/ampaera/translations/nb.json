@@ -40,9 +40,9 @@
       },
       "devices": {
         "title": "Velg enheter",
-        "description": "Velg hvilke Home Assistant-enheter som skal synkroniseres med Ampæra. Fant {device_count} kompatible enheter. Du kan fortsette uten enheter og legge dem til senere. Kun ekte fysiske enheter vises.",
+        "description": "Velg hvilke Home Assistant-enheter som skal synkroniseres med Ampæra. Viser {device_count} energi-relevante enheter ({hidden_count} ikke-energienheter som kameraer og varsler er skjult — du kan vise dem senere under Administrer enheter). Anbefalte strømmålere, elbilladere og varmtvannsberedere er forhåndsvalgt.",
         "data": {
-          "selected_entities": "Enheter å synkronisere (valgfritt)"
+          "selected_entities": "Enheter å synkronisere"
         }
       },
       "simulation": {
@@ -114,9 +114,13 @@
       },
       "manage_devices": {
         "title": "Administrer enheter",
-        "description": "Velg hvilke enheter som skal synkroniseres med Ampæra. Fant {device_count} tilgjengelige enheter.",
+        "description": "Velg hvilke enheter som skal synkroniseres med Ampæra. Viser {device_count} av {total_count} enheter ({hidden_count} ikke-energienheter er skjult). Slå på 'Vis alle enheter' for å inkludere kameraer, mikrofoner, bevegelsessensorer og andre ikke-energienheter.",
         "data": {
-          "selected_entities": "Enheter å synkronisere"
+          "selected_entities": "Enheter å synkronisere",
+          "show_all_devices": "Vis alle enheter (avansert)"
+        },
+        "data_description": {
+          "show_all_devices": "Inkluder kameraer, mikrofoner, varsler og andre ikke-energienheter i listen."
         }
       },
       "settings": {
