@@ -100,6 +100,12 @@ from .discovery import (
     DiscoveredDevice,
     DiscoveryOrchestrator,
 )
+from .discovery.grouping import (
+    DeviceGroup,
+    collapse_to_group_ids,
+    expand_group_selections,
+    group_similar_devices,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -136,19 +142,43 @@ _DEVICE_TYPE_ORDER: dict[AmperaDeviceType, int] = {
 }
 
 
+def _format_device_label(device: DiscoveredDevice) -> str:
+    """Render the picker label for a single device."""
+    type_label = _DEVICE_TYPE_LABELS.get(device.device_type, device.device_type.value)
+    sensor_count = len(device.capabilities)
+    sensor_word = "sensor" if sensor_count == 1 else "sensorer"
+    return f"{device.display_name()} – {type_label}, {sensor_count} {sensor_word}"
+
+
+def _format_group_label(group: DeviceGroup) -> str:
+    """Render the picker label for a device group."""
+    type_label = _DEVICE_TYPE_LABELS.get(group.device_type, group.device_type.value)
+    unit_word = "enhet" if group.count == 1 else "enheter"
+    return f"{group.base_name} – {type_label}, {group.count} {unit_word} (gruppert)"
+
+
 def _build_device_picker_options(
     devices: list[DiscoveredDevice],
     show_all: bool,
-) -> tuple[list[SelectOptionDict], list[str]]:
+) -> tuple[list[SelectOptionDict], list[str], list[DeviceGroup]]:
     """Build picker options + recommended default selection.
 
     Filters out non-energy devices unless ``show_all=True``, sorts by
     device type (power meters first, switches last), and uses the
     cleaned ``display_name()`` rather than the raw HA name.
 
+    When ``show_all`` is False we also collapse clusters of near-identical
+    devices (same base name, type, and model) into a single group option —
+    this keeps multi-channel meters like em16 from flooding the picker
+    with 18 almost-identical rows. When ``show_all`` is True we disable
+    grouping so advanced users can cherry-pick individual channels.
+
     Returns:
-        (options, default_selection) where default_selection contains
-        the IDs of the recommended-for-pre-selection devices.
+        (options, default_selection, groups) — ``options`` is ready to
+        hand to ``SelectSelectorConfig``, ``default_selection`` is a list
+        of option values (device IDs and/or group IDs) to pre-check, and
+        ``groups`` is the grouping metadata needed to expand submissions
+        back to member device IDs.
     """
     visible = [d for d in devices if show_all or d.is_energy_relevant]
     visible.sort(
@@ -158,16 +188,35 @@ def _build_device_picker_options(
         )
     )
 
-    options: list[SelectOptionDict] = []
-    for device in visible:
-        type_label = _DEVICE_TYPE_LABELS.get(device.device_type, device.device_type.value)
-        sensor_count = len(device.capabilities)
-        sensor_word = "sensor" if sensor_count == 1 else "sensorer"
-        label = f"{device.display_name()} – {type_label}, {sensor_count} {sensor_word}"
-        options.append(SelectOptionDict(value=device.ha_device_id, label=label))
+    if show_all:
+        groups: list[DeviceGroup] = []
+        ungrouped = visible
+    else:
+        groups, ungrouped = group_similar_devices(visible)
+        groups.sort(
+            key=lambda g: (
+                _DEVICE_TYPE_ORDER.get(g.device_type, 99),
+                g.base_name.lower(),
+            )
+        )
 
-    default_selection = [d.ha_device_id for d in visible if d.is_recommended]
-    return options, default_selection
+    options: list[SelectOptionDict] = []
+    # Groups render first within each device type so the meaningful
+    # rollups are at the top of the list.
+    for group in groups:
+        options.append(
+            SelectOptionDict(value=group.group_id, label=_format_group_label(group))
+        )
+    for device in ungrouped:
+        options.append(
+            SelectOptionDict(
+                value=device.ha_device_id, label=_format_device_label(device)
+            )
+        )
+
+    default_selection: list[str] = [g.group_id for g in groups if g.is_recommended]
+    default_selection.extend(d.ha_device_id for d in ungrouped if d.is_recommended)
+    return options, default_selection, groups
 
 
 class AmperaOAuth2FlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
@@ -187,6 +236,7 @@ class AmperaOAuth2FlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
         self._grid_region: str = "NO1"
         self._ha_instance_id: str = _generate_ha_instance_id()
         self._discovered_devices: list[DiscoveredDevice] = []
+        self._device_groups: list[DeviceGroup] = []
         self._selected_entities: list[str] = []
         self._site_id: str | None = None
         self._device_mappings: dict[str, str] = {}
@@ -408,7 +458,13 @@ class AmperaOAuth2FlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            self._selected_entities = user_input.get(CONF_SELECTED_ENTITIES, [])
+            raw_selection = user_input.get(CONF_SELECTED_ENTITIES, [])
+            # Expand any group IDs back to member device IDs before we
+            # persist the selection — downstream code (device sync, API
+            # registration) only understands raw ha_device_id values.
+            self._selected_entities = expand_group_selections(
+                raw_selection, getattr(self, "_device_groups", [])
+            )
             # Allow continuing with 0 devices - user can add devices later
             # In real mode, go directly to registration (no simulation)
             self._enable_simulation = False
@@ -444,13 +500,17 @@ class AmperaOAuth2FlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
         # users with many smart-home devices (cameras, switches) get a
         # focused list. They can opt in to the full list later via the
         # "Manage devices" options flow.
-        device_options, default_selection = _build_device_picker_options(
+        device_options, default_selection, device_groups = _build_device_picker_options(
             self._discovered_devices,
             show_all=False,
         )
+        self._device_groups = device_groups
         total_count = len(self._discovered_devices)
-        visible_count = len(device_options)
-        hidden_count = total_count - visible_count
+        energy_count = sum(1 for d in self._discovered_devices if d.is_energy_relevant)
+        hidden_count = total_count - energy_count
+        group_count = len(device_groups)
+        grouped_device_count = sum(g.count for g in device_groups)
+        shown_option_count = len(device_options)
 
         return self.async_show_form(
             step_id="devices",
@@ -467,9 +527,12 @@ class AmperaOAuth2FlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
             ),
             errors=errors,
             description_placeholders={
-                "device_count": str(visible_count),
+                "device_count": str(shown_option_count),
                 "total_count": str(total_count),
                 "hidden_count": str(hidden_count),
+                "group_count": str(group_count),
+                "grouped_device_count": str(grouped_device_count),
+                "energy_count": str(energy_count),
             },
         )
 
@@ -754,6 +817,7 @@ class AmperaOptionsFlow(OptionsFlow):
         """Initialize options flow."""
         self._config_entry = config_entry
         self._discovered_devices: list[Any] = []
+        self._manage_device_groups: list[DeviceGroup] = []
 
     @property
     def config_entry(self) -> ConfigEntry:
@@ -904,7 +968,7 @@ class AmperaOptionsFlow(OptionsFlow):
 
         if user_input is not None:
             # User submitted new device selection (and possibly toggled show_all).
-            new_selected = user_input.get(CONF_SELECTED_ENTITIES, [])
+            raw_new_selected = user_input.get(CONF_SELECTED_ENTITIES, [])
             new_show_all = bool(user_input.get(CONF_SHOW_ALL_DEVICES, False))
 
             # If only the toggle changed, persist it and re-render the form
@@ -915,6 +979,11 @@ class AmperaOptionsFlow(OptionsFlow):
                     data={**entry_data, CONF_SHOW_ALL_DEVICES: new_show_all},
                 )
                 return await self.async_step_manage_devices()
+
+            # Expand any group IDs back to member device IDs before storing.
+            new_selected = expand_group_selections(
+                raw_new_selected, self._manage_device_groups
+            )
 
             # Update config entry data with new selection
             new_data = {
@@ -932,21 +1001,35 @@ class AmperaOptionsFlow(OptionsFlow):
         # Discover all available devices (only in real mode)
         device_options: list[SelectOptionDict] = []
         total_count = 0
+        energy_count = 0
         hidden_count = 0
+        group_count = 0
+        grouped_device_count = 0
+        self._manage_device_groups: list[DeviceGroup] = []
 
         if not is_simulation:
             discovery = DiscoveryOrchestrator(self.hass)
             self._discovered_devices, _ = discovery.discover()
             total_count = len(self._discovered_devices)
+            energy_count = sum(
+                1 for d in self._discovered_devices if d.is_energy_relevant
+            )
 
-            device_options, _ = _build_device_picker_options(
+            device_options, _, self._manage_device_groups = _build_device_picker_options(
                 self._discovered_devices,
                 show_all=current_show_all,
             )
-            hidden_count = total_count - len(device_options)
+            hidden_count = total_count - energy_count
+            group_count = len(self._manage_device_groups)
+            grouped_device_count = sum(g.count for g in self._manage_device_groups)
 
-        # Get currently selected devices
-        current_selected = list(entry_data.get(CONF_SELECTED_ENTITIES, []))
+        # Get currently selected devices, collapsing fully-selected groups
+        # so the form shows one pre-checked group option instead of leaving
+        # its members invisible and unchecked.
+        stored_selected = list(entry_data.get(CONF_SELECTED_ENTITIES, []))
+        current_selected = collapse_to_group_ids(
+            stored_selected, self._manage_device_groups
+        )
 
         # For simulation mode, add simulated device options
         if is_simulation:
@@ -980,6 +1063,9 @@ class AmperaOptionsFlow(OptionsFlow):
                     "device_count": "0",
                     "total_count": "0",
                     "hidden_count": "0",
+                    "group_count": "0",
+                    "grouped_device_count": "0",
+                    "energy_count": "0",
                 },
             )
 
@@ -1008,6 +1094,9 @@ class AmperaOptionsFlow(OptionsFlow):
                 "device_count": str(len(device_options)),
                 "total_count": str(total_count),
                 "hidden_count": str(hidden_count),
+                "energy_count": str(energy_count),
+                "group_count": str(group_count),
+                "grouped_device_count": str(grouped_device_count),
             },
         )
 

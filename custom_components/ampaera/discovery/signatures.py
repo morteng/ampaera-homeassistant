@@ -263,6 +263,26 @@ KEYWORDS: dict[AmperaDeviceType, set[str]] = {
 # Integrations to exclude from discovery
 EXCLUDED_INTEGRATIONS: set[str] = set()
 
+# Integrations whose devices/entities are never relevant to energy management.
+# Used by DeviceClassifier to mark devices as is_energy_relevant=False so they
+# are hidden from the default picker. Covers HA add-ons (hassio), our own
+# integration (to avoid self-discovery loops), and common security/media
+# integrations that surface as switches or sensors without energy signals.
+NON_ENERGY_INTEGRATIONS: set[str] = {
+    "hassio",         # HA add-ons: HACS, Samba, FTP, Mosquitto, File editor, Terminal & SSH, ...
+    "hacs",           # HACS frontend switches
+    "ampaera",        # our own entities — never re-discover them
+    "eufy_security",
+    "eufy_security_ws",
+    "ring",
+    "nest",
+    "unifi_protect",
+    "frigate",
+    "reolink",
+    "blink",
+    "arlo",
+}
+
 # Device classes that indicate energy-related sensors
 ENERGY_DEVICE_CLASSES: set[str] = {
     "power",

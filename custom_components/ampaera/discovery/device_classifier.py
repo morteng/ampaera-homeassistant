@@ -22,6 +22,7 @@ from .models import (
 from .signatures import (
     KEYWORDS,
     KNOWN_INTEGRATIONS,
+    NON_ENERGY_INTEGRATIONS,
     NON_ENERGY_KEYWORDS,
     SEMANTIC_SIGNALS,
 )
@@ -589,7 +590,17 @@ class DeviceClassifier:
         energy/power capabilities to back it up. Devices with real power
         or energy capabilities always pass the filter, even if the name
         accidentally matches a non-energy keyword.
+
+        Hard exclusion: any entity sourced from an integration in
+        NON_ENERGY_INTEGRATIONS (HA add-ons, our own integration, security
+        cameras, ...) is unconditionally non-energy, even if a capability
+        accidentally matched. HA add-ons surface as switches from the
+        ``hassio`` platform and should never appear in the energy picker.
         """
+        for entity in device.entities:
+            if entity.platform and entity.platform.lower() in NON_ENERGY_INTEGRATIONS:
+                return False
+
         energy_caps = {
             AmperaCapability.POWER,
             AmperaCapability.POWER_L1,

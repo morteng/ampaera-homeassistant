@@ -32,17 +32,24 @@
       },
       "location": {
         "title": "Konfigurer sted",
-        "description": "Angi stedsnavn og velg din nettregion for riktig spotprising.",
+        "description": "Gi stedet et navn og velg **Nord Pool nettregion** så spotprisene passer ditt område:\n\n- **NO1** — Oslo og Østlandet\n- **NO2** — Kristiansand og Sørlandet\n- **NO3** — Trondheim og Midt-Norge\n- **NO4** — Tromsø og Nord-Norge\n- **NO5** — Bergen og Vestlandet\n\nStedsnavnet er bare en etikett (f.eks. \"Hjemme\", \"Hytta\") — velg det som hjelper deg å skille stedene i Ampæra-appen.",
         "data": {
           "site_name": "Stedsnavn",
           "grid_region": "Nettregion"
+        },
+        "data_description": {
+          "site_name": "Et lett gjenkjennelig navn for denne Home Assistant-installasjonen (vises i Ampæra-appen).",
+          "grid_region": "Bestemmer hvilken Nord Pool-sone timesprisene hentes fra."
         }
       },
       "devices": {
         "title": "Velg enheter",
-        "description": "Velg hvilke Home Assistant-enheter som skal synkroniseres med Ampæra. Viser {device_count} energi-relevante enheter ({hidden_count} ikke-energienheter som kameraer og varsler er skjult — du kan vise dem senere under Administrer enheter). Anbefalte strømmålere, elbilladere og varmtvannsberedere er forhåndsvalgt.",
+        "description": "Velg hvilke Home Assistant-enheter Ampæra skal synkronisere.\n\n**Fant {total_count} enheter i Home Assistant** — viser **{device_count}** for valg:\n- {energy_count} ser energi-relevante ut ({hidden_count} ikke-energienheter er skjult — kameraer, HA-tillegg, varsler …)\n- {group_count} grupper samler {grouped_device_count} like enheter (f.eks. flerkanals-målere som em16 med 18 kretser)\n\n**Anbefalte** strømmålere, elbilladere og varmtvannsberedere er forhåndsvalgt. Fjern haken på det du ikke vil ha med, og send inn. Du kan endre dette senere under **Alternativer → Administrer enheter**.",
         "data": {
           "selected_entities": "Enheter å synkronisere"
+        },
+        "data_description": {
+          "selected_entities": "Oppføringer merket *(gruppert)* representerer flerkanals-målere — å huke av én aktiverer alle kanalene samtidig. Slå på 'Vis alle enheter' under Administrer enheter senere hvis du må plukke kanaler enkeltvis."
         }
       },
       "simulation": {
@@ -114,13 +121,14 @@
       },
       "manage_devices": {
         "title": "Administrer enheter",
-        "description": "Velg hvilke enheter som skal synkroniseres med Ampæra. Viser {device_count} av {total_count} enheter ({hidden_count} ikke-energienheter er skjult). Slå på 'Vis alle enheter' for å inkludere kameraer, mikrofoner, bevegelsessensorer og andre ikke-energienheter.",
+        "description": "Velg hvilke enheter Ampæra skal synkronisere.\n\n**{device_count} av {total_count} enheter vises** — {hidden_count} ikke-energienheter er skjult, {group_count} grupper samler {grouped_device_count} like enheter.\n\nHuk av **Vis alle enheter** nedenfor for å liste hver kanal individuelt — nyttig for å plukke kanaler inne i en gruppert måler eller inkludere ikke-energienheter (kameraer, HA-tillegg, bevegelsessensorer, varsler). Oppføringer merket *(gruppert)* aktiverer alle kanaler samtidig når de hukes av.",
         "data": {
           "selected_entities": "Enheter å synkronisere",
           "show_all_devices": "Vis alle enheter (avansert)"
         },
         "data_description": {
-          "show_all_devices": "Inkluder kameraer, mikrofoner, varsler og andre ikke-energienheter i listen."
+          "selected_entities": "Forhåndsvalgte oppføringer er Ampæras anbefaling. Fjern haken på det du ikke vil synkronisere.",
+          "show_all_devices": "Avslører hver kanal inne i grupperte målere og inkluderer ikke-energienheter (kameraer, HA-tillegg, mikrofoner, varsler). Send inn på nytt etter å ha endret bryteren for å oppdatere listen."
         }
       },
       "settings": {

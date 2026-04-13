@@ -5,6 +5,21 @@ All notable changes to the Ampæra Home Assistant integration.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-04-13
+
+### Added
+- **Device Grouping**: Multi-channel meters like Shelly em16 (with 18 circuits) are now collapsed into a single grouped option in the picker. Selecting the group enables every channel at once. Triggers automatically when 3+ devices share base name + type + manufacturer + model.
+- **Integration Denylist**: Devices from `hassio` (HA add-ons such as HACS, Samba, Mosquitto, File editor, FTP, Terminal & SSH), `eufy_security`, `ring`, `nest`, `unifi_protect`, `frigate`, `reolink`, `blink`, `arlo` and our own `ampaera` integration are now excluded at discovery time. Beta users with ~70 devices typically saw 10+ irrelevant rows from add-ons; these no longer appear.
+- **Onboarding Step Copy Refresh**: The *Select Devices*, *Manage Devices* and *Configure Site* steps now show richer descriptions with explicit counts ("Found 72 devices, showing 12 — 10 hidden as non-energy, 2 groups collapse 36 similar devices"), Nord Pool grid region guidance (NO1–NO5), and `data_description` helpers explaining what *(grouped)* labels mean and what *Show all devices* reveals.
+
+### Changed
+- The picker now displays grouped meters first within each device type, followed by individual devices. Toggling *Show all devices* in *Manage Devices* disables grouping so advanced users can cherry-pick individual channels.
+- Picker option labels for groups read `<base name> – <type>, <count> enheter (gruppert)` (e.g. `em16 – strømmåler, 18 enheter (gruppert)`).
+
+### Compatibility
+- Home Assistant: 2024.1.0+
+- Ampæra API: v0.34.0+
+
 ## [2.1.0] - 2026-04-13
 
 ### Added

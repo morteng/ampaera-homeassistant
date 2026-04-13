@@ -32,17 +32,24 @@
       },
       "location": {
         "title": "Configure Site",
-        "description": "Set your site name and select your electricity grid region for accurate spot pricing.",
+        "description": "Give this site a name and pick your **Nord Pool grid region** so spot prices match your area:\n\n- **NO1** — Oslo & Eastern Norway\n- **NO2** — Kristiansand & Southern Norway\n- **NO3** — Trondheim & Central Norway\n- **NO4** — Tromsø & Northern Norway\n- **NO5** — Bergen & Western Norway\n\nThe site name is just a label (e.g. \"Home\", \"Cabin\") — pick whatever helps you tell sites apart in the Ampæra app.",
         "data": {
           "site_name": "Site name",
           "grid_region": "Grid region"
+        },
+        "data_description": {
+          "site_name": "A friendly name for this Home Assistant instance (shown in the Ampæra app).",
+          "grid_region": "Determines which Nord Pool zone your hourly spot prices come from."
         }
       },
       "devices": {
         "title": "Select Devices",
-        "description": "Choose which Home Assistant devices to sync with Ampæra. Showing {device_count} energy-relevant devices ({hidden_count} non-energy devices like cameras and notifications are hidden — you can show them later under Manage Devices). Recommended power meters, EV chargers and water heaters are pre-selected.",
+        "description": "Pick which Home Assistant devices Ampæra should sync.\n\n**Found {total_count} devices in Home Assistant** — showing **{device_count}** for selection:\n- {energy_count} look energy-relevant ({hidden_count} non-energy devices hidden — cameras, HA add-ons, notifications, …)\n- {group_count} groups collapse {grouped_device_count} similar devices (e.g. multi-channel meters like em16 with 18 circuits)\n\n**Recommended** power meters, EV chargers and water heaters are pre-selected. Untick anything you'd rather leave out, then submit. You can change this later under **Options → Manage Devices**.",
         "data": {
           "selected_entities": "Devices to sync"
+        },
+        "data_description": {
+          "selected_entities": "Items marked *(grouped)* represent multi-channel meters — selecting one enables all its channels at once. Toggle 'Show all devices' under Manage Devices later if you need to cherry-pick individual channels."
         }
       },
       "simulation": {
@@ -114,13 +121,14 @@
       },
       "manage_devices": {
         "title": "Manage Devices",
-        "description": "Select which devices to sync with Ampæra. Showing {device_count} of {total_count} devices ({hidden_count} non-energy devices hidden). Toggle 'Show all devices' to include cameras, microphones, motion sensors and other non-energy devices.",
+        "description": "Select which devices Ampæra should sync.\n\n**{device_count} of {total_count} devices shown** — {hidden_count} non-energy devices hidden, {group_count} groups collapse {grouped_device_count} similar devices.\n\nTick **Show all devices** below to list every channel individually — useful for cherry-picking inside a grouped meter or including non-energy devices (cameras, HA add-ons, motion sensors, notifications). Items labelled *(grouped)* enable all member channels at once when ticked.",
         "data": {
           "selected_entities": "Devices to sync",
           "show_all_devices": "Show all devices (advanced)"
         },
         "data_description": {
-          "show_all_devices": "Include cameras, microphones, notifications and other non-energy devices in the picker."
+          "selected_entities": "Pre-selected items are Ampæra's recommendation. Untick anything you'd rather not sync.",
+          "show_all_devices": "Reveals every channel inside grouped meters and includes non-energy devices (cameras, HA add-ons, microphones, notifications). Re-submit after toggling to refresh the list."
         }
       },
       "settings": {

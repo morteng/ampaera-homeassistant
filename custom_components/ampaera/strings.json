@@ -11,17 +11,24 @@
       },
       "location": {
         "title": "Configure Site",
-        "description": "Set your site name and select your electricity grid region for accurate spot pricing.",
+        "description": "Give this site a name and pick your **Nord Pool grid region** so spot prices match your area:\n\n- **NO1** — Oslo & Eastern Norway\n- **NO2** — Kristiansand & Southern Norway\n- **NO3** — Trondheim & Central Norway\n- **NO4** — Tromsø & Northern Norway\n- **NO5** — Bergen & Western Norway\n\nThe site name is just a label (e.g. \"Home\", \"Cabin\") — pick whatever helps you tell sites apart in the Ampaera app.",
         "data": {
           "site_name": "Site name",
           "grid_region": "Grid region"
+        },
+        "data_description": {
+          "site_name": "A friendly name for this Home Assistant instance (shown in the Ampaera app).",
+          "grid_region": "Determines which Nord Pool zone your hourly spot prices come from."
         }
       },
       "devices": {
         "title": "Select Devices",
-        "description": "Choose which Home Assistant devices to sync with Ampaera. Found {device_count} compatible devices.",
+        "description": "Pick which Home Assistant devices Ampaera should sync.\n\n**Found {total_count} devices in Home Assistant** — showing **{device_count}** for selection:\n- {energy_count} look energy-relevant ({hidden_count} non-energy devices hidden — cameras, HA add-ons, notifications, …)\n- {group_count} groups collapse {grouped_device_count} similar devices (e.g. multi-channel meters like em16 with 18 circuits)\n\n**Recommended** power meters, EV chargers and water heaters are pre-selected. Untick anything you'd rather leave out, then submit. You can change this later under **Options → Manage Devices**.",
         "data": {
           "selected_entities": "Devices to sync"
+        },
+        "data_description": {
+          "selected_entities": "Items marked *(grouped)* represent multi-channel meters — selecting one enables all its channels at once."
         }
       },
       "reauth_confirm": {
@@ -84,9 +91,14 @@
       },
       "manage_devices": {
         "title": "Manage Devices",
-        "description": "Select which devices to sync with Ampaera. Found {device_count} available devices.",
+        "description": "Select which devices Ampaera should sync.\n\n**{device_count} of {total_count} devices shown** — {hidden_count} non-energy devices hidden, {group_count} groups collapse {grouped_device_count} similar devices.\n\nTick **Show all devices** below to list every channel individually.",
         "data": {
-          "selected_entities": "Devices to sync"
+          "selected_entities": "Devices to sync",
+          "show_all_devices": "Show all devices (advanced)"
+        },
+        "data_description": {
+          "selected_entities": "Pre-selected items are Ampaera's recommendation. Untick anything you'd rather not sync.",
+          "show_all_devices": "Reveals every channel inside grouped meters and includes non-energy devices."
         }
       },
       "settings": {
