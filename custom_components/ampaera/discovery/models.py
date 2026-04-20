@@ -118,7 +118,7 @@ class DiscoveredDevice:
         name = self.name
 
         # Replace any "(CODE)" suffix with the human-readable label when known.
-        def _replace_code(match: "re.Match[str]") -> str:
+        def _replace_code(match: re.Match[str]) -> str:
             code = match.group(1)
             label = OBIS_LABEL_MAP.get(code.upper())
             if label:

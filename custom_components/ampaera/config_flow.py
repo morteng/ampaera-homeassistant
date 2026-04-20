@@ -76,8 +76,8 @@ from .const import (
     CONF_POLLING_INTERVAL,
     CONF_SELECTED_ENTITIES,
     CONF_SENSOR_STREAM_ENTITIES,
-    CONF_SHOW_ALL_DEVICES,
     CONF_SENSOR_STREAM_INTERVAL,
+    CONF_SHOW_ALL_DEVICES,
     CONF_SIMULATION_HOUSEHOLD_PROFILE,
     CONF_SIMULATION_WATER_HEATER_TYPE,
     CONF_SITE_ID,
@@ -100,13 +100,13 @@ from .discovery import (
     DiscoveredDevice,
     DiscoveryOrchestrator,
 )
-from .discovery.models import AmperaCapability
 from .discovery.grouping import (
     DeviceGroup,
     collapse_to_group_ids,
     expand_group_selections,
     group_similar_devices,
 )
+from .discovery.models import AmperaCapability
 
 _LOGGER = logging.getLogger(__name__)
 
