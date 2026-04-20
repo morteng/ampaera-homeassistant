@@ -400,9 +400,7 @@ class AmperaDeviceSyncService:
 
         return entity_mappings
 
-    async def _auto_enable_disabled_entities(
-        self, devices: list[DiscoveredDevice]
-    ) -> None:
+    async def _auto_enable_disabled_entities(self, devices: list[DiscoveredDevice]) -> None:
         """Auto-enable disabled entities that belong to synced devices.
 
         When device integrations (e.g., Refoss EM16) disable entities by default
@@ -442,9 +440,7 @@ class AmperaDeviceSyncService:
                     entity_id,
                     entry.platform,
                 )
-                entity_registry.async_update_entity(
-                    entity_id, disabled_by=None
-                )
+                entity_registry.async_update_entity(entity_id, disabled_by=None)
                 enabled_entities.append(entity_id)
 
         if enabled_entities:
@@ -464,8 +460,11 @@ class AmperaDeviceSyncService:
                     f"sensor-entiteter som var deaktivert av sine integrasjoner. "
                     f"Dette sikrer at all telemetri-data kan samles inn.\n\n"
                     f"Aktiverte entiteter: {', '.join(enabled_entities[:20])}"
-                    + (f"\n... og {len(enabled_entities) - 20} til"
-                       if len(enabled_entities) > 20 else "")
+                    + (
+                        f"\n... og {len(enabled_entities) - 20} til"
+                        if len(enabled_entities) > 20
+                        else ""
+                    )
                 ),
                 notification_id="ampaera_entities_enabled",
             )
@@ -474,13 +473,12 @@ class AmperaDeviceSyncService:
             # Schedule an integration reload after a short delay
             async def _reload_after_enable() -> None:
                 import asyncio
+
                 await asyncio.sleep(5)
                 _LOGGER.info("Reloading integration after enabling disabled entities")
                 await self._hass.config_entries.async_reload(self._entry.entry_id)
 
-            self._hass.async_create_task(
-                _reload_after_enable(), name="ampaera_reload_after_enable"
-            )
+            self._hass.async_create_task(_reload_after_enable(), name="ampaera_reload_after_enable")
 
     async def async_force_sync(self) -> tuple[dict[str, str], dict[str, EntityMapping]]:
         """Force an immediate device sync.

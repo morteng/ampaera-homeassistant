@@ -697,9 +697,7 @@ class AmperaDeviceDiscovery:
         num_segs = len(segmented[0])
 
         # Find segment positions where values differ across entities
-        differing_positions = [
-            i for i in range(num_segs) if len({s[i] for s in segmented}) > 1
-        ]
+        differing_positions = [i for i in range(num_segs) if len({s[i] for s in segmented}) > 1]
 
         if not differing_positions:
             return {eid: f"ch_{i + 1}" for i, eid in enumerate(entity_ids)}
@@ -737,9 +735,7 @@ class AmperaDeviceDiscovery:
             return False
 
         num_segs = len(segmented[0])
-        differing_positions = [
-            i for i in range(num_segs) if len({s[i] for s in segmented}) > 1
-        ]
+        differing_positions = [i for i in range(num_segs) if len({s[i] for s in segmented}) > 1]
 
         if not differing_positions:
             return False
@@ -755,9 +751,7 @@ class AmperaDeviceDiscovery:
 
         return True
 
-    def _split_into_channels(
-        self, entities: list[State]
-    ) -> list[tuple[str | None, list[State]]]:
+    def _split_into_channels(self, entities: list[State]) -> list[tuple[str | None, list[State]]]:
         """Split a device's entities into per-channel groups.
 
         Detects multi-channel devices by finding capabilities that map to
@@ -787,9 +781,7 @@ class AmperaDeviceDiscovery:
                 capability_entities.setdefault(cap_key, []).append(state)
 
         # Step 2: Check if any capability has multiple entities
-        multi_cap = {
-            cap: ents for cap, ents in capability_entities.items() if len(ents) > 1
-        }
+        multi_cap = {cap: ents for cap, ents in capability_entities.items() if len(ents) > 1}
 
         if not multi_cap:
             # Single-channel device — no splitting needed
@@ -809,8 +801,7 @@ class AmperaDeviceDiscovery:
 
         # Verify entity names show a channel-like pattern (a1/b1, 1/2, ch1/ch2)
         has_pattern = any(
-            self._has_channel_pattern([e.entity_id for e in ents])
-            for ents in multi_cap.values()
+            self._has_channel_pattern([e.entity_id for e in ents]) for ents in multi_cap.values()
         )
         if not has_pattern:
             _LOGGER.debug(
@@ -836,7 +827,9 @@ class AmperaDeviceDiscovery:
                 channels[direct_map[state.entity_id]].append(state)
             else:
                 # Entity has a unique capability — try token matching, else shared
-                entity_name = state.entity_id.split(".", 1)[1] if "." in state.entity_id else state.entity_id
+                entity_name = (
+                    state.entity_id.split(".", 1)[1] if "." in state.entity_id else state.entity_id
+                )
                 entity_name_lower = entity_name.lower()
 
                 matched_channel = None
@@ -1193,9 +1186,7 @@ class AmperaDeviceDiscovery:
                 for ch_id, ch_entities in channel_groups:
                     assert ch_id is not None  # guaranteed in multi-channel branch
                     synthetic_id = f"{device_id}__ch_{ch_id}"
-                    device = self._build_device_from_entities(
-                        synthetic_id, ch_entities
-                    )
+                    device = self._build_device_from_entities(synthetic_id, ch_entities)
                     if device:
                         device.name = f"{device.name} ({ch_id.upper()})"
                         devices.append(device)
@@ -1339,7 +1330,9 @@ class AmperaDeviceDiscovery:
                 if capability not in capabilities:
                     capabilities.append(capability)
                     entity_mapping[capability.value] = state.entity_id
-                elif self._entity_has_better_value(state, entity_mapping.get(capability.value, ""), entities):
+                elif self._entity_has_better_value(
+                    state, entity_mapping.get(capability.value, ""), entities
+                ):
                     # Multi-channel devices (e.g. Refoss EM16 with A1/B1 channels)
                     # may have duplicate capabilities — prefer the entity with
                     # a non-zero reading over one reading zero.
@@ -1572,7 +1565,9 @@ class AmperaDeviceDiscovery:
             if capability not in capabilities:
                 capabilities.append(capability)
                 entity_mapping[capability.value] = state.entity_id
-            elif self._entity_has_better_value(state, entity_mapping.get(capability.value, ""), all_states):
+            elif self._entity_has_better_value(
+                state, entity_mapping.get(capability.value, ""), all_states
+            ):
                 entity_mapping[capability.value] = state.entity_id
 
             # Track power entities for primary selection

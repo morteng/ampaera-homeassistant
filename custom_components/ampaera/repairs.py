@@ -51,9 +51,7 @@ async def async_create_repair_issues(
             translation_key="unmapped_entities",
             translation_placeholders={
                 "count": str(len(report.unmapped_entities)),
-                "entities": ", ".join(
-                    e.entity_id for e in report.unmapped_entities[:10]
-                ),
+                "entities": ", ".join(e.entity_id for e in report.unmapped_entities[:10]),
             },
         )
     else:

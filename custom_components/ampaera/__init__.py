@@ -434,7 +434,11 @@ async def _async_setup_dashboard(
     installation_mode = entry.data.get(CONF_INSTALLATION_MODE, INSTALLATION_MODE_REAL)
 
     await _async_create_or_update_dashboard(
-        hass, site_id, site_name, installation_mode, entry=entry,
+        hass,
+        site_id,
+        site_name,
+        installation_mode,
+        entry=entry,
         entity_mappings=entity_mappings,
     )
 
@@ -460,16 +464,18 @@ def _build_real_mode_dashboard(
     # Power gauge
     power_entity = by_cap.get("power")
     if power_entity:
-        overview_cards.append({
-            "type": "gauge",
-            "entity": power_entity,
-            "name": "Nåværende effekt",
-            "min": 0,
-            "max": 15000,
-            "severity": {"green": 0, "yellow": 5000, "red": 10000},
-            "needle": True,
-            "unit": "W",
-        })
+        overview_cards.append(
+            {
+                "type": "gauge",
+                "entity": power_entity,
+                "name": "Nåværende effekt",
+                "min": 0,
+                "max": 15000,
+                "severity": {"green": 0, "yellow": 5000, "red": 10000},
+                "needle": True,
+                "unit": "W",
+            }
+        )
 
     # Glance card with key metrics
     glance_entities = []
@@ -482,35 +488,41 @@ def _build_real_mode_dashboard(
         if cap in by_cap:
             glance_entities.append({"entity": by_cap[cap], "name": label})
     if glance_entities:
-        overview_cards.append({
-            "type": "glance",
-            "title": "Nøkkeltall",
-            "entities": glance_entities,
-        })
+        overview_cards.append(
+            {
+                "type": "glance",
+                "title": "Nøkkeltall",
+                "entities": glance_entities,
+            }
+        )
 
     # Power history graph
     history_entities = []
     if power_entity:
         history_entities.append({"entity": power_entity, "name": "Total effekt"})
     if history_entities:
-        overview_cards.append({
-            "type": "history-graph",
-            "title": "Effekthistorikk",
-            "hours_to_show": 24,
-            "entities": history_entities,
-        })
+        overview_cards.append(
+            {
+                "type": "history-graph",
+                "title": "Effekthistorikk",
+                "hours_to_show": 24,
+                "entities": history_entities,
+            }
+        )
 
     # Fallback if no entities at all
     if not overview_cards:
-        overview_cards.append({
-            "type": "markdown",
-            "title": "Ingen enheter synkronisert",
-            "content": (
-                "Ingen enheter er synkronisert med Ampæra ennå.\n\n"
-                "Gå til **Innstillinger** → **Integrasjoner** → **Ampæra** "
-                "→ **Konfigurer** → **Administrer enheter** for å legge til enheter."
-            ),
-        })
+        overview_cards.append(
+            {
+                "type": "markdown",
+                "title": "Ingen enheter synkronisert",
+                "content": (
+                    "Ingen enheter er synkronisert med Ampæra ennå.\n\n"
+                    "Gå til **Innstillinger** → **Integrasjoner** → **Ampæra** "
+                    "→ **Konfigurer** → **Administrer enheter** for å legge til enheter."
+                ),
+            }
+        )
 
     # Energy tab cards
     energy_cards: list[dict] = []
@@ -522,11 +534,13 @@ def _build_real_mode_dashboard(
             label = phase.replace("voltage_", "Fase ").upper()
             voltage_entities.append({"entity": by_cap[phase], "name": label})
     if voltage_entities:
-        energy_cards.append({
-            "type": "entities",
-            "title": "Fasespenninger",
-            "entities": voltage_entities,
-        })
+        energy_cards.append(
+            {
+                "type": "entities",
+                "title": "Fasespenninger",
+                "entities": voltage_entities,
+            }
+        )
 
     # Phase currents
     current_entities = []
@@ -535,11 +549,13 @@ def _build_real_mode_dashboard(
             label = phase.replace("current_", "Fase ").upper()
             current_entities.append({"entity": by_cap[phase], "name": label})
     if current_entities:
-        energy_cards.append({
-            "type": "entities",
-            "title": "Fasestrømmer",
-            "entities": current_entities,
-        })
+        energy_cards.append(
+            {
+                "type": "entities",
+                "title": "Fasestrømmer",
+                "entities": current_entities,
+            }
+        )
 
     # Energy registers
     energy_entities = []
@@ -552,17 +568,21 @@ def _build_real_mode_dashboard(
         if cap in by_cap:
             energy_entities.append({"entity": by_cap[cap], "name": label})
     if energy_entities:
-        energy_cards.append({
-            "type": "entities",
-            "title": "Energiregistre",
-            "entities": energy_entities,
-        })
+        energy_cards.append(
+            {
+                "type": "entities",
+                "title": "Energiregistre",
+                "entities": energy_entities,
+            }
+        )
 
     if not energy_cards:
-        energy_cards.append({
-            "type": "markdown",
-            "content": "Ingen energisensorer synkronisert.",
-        })
+        energy_cards.append(
+            {
+                "type": "markdown",
+                "content": "Ingen energisensorer synkronisert.",
+            }
+        )
 
     # Info tab
     grid_region = "NO1"
@@ -590,18 +610,22 @@ def _build_real_mode_dashboard(
         },
     ]
     if energy_cards:
-        views.append({
-            "title": "Energi",
-            "path": "energy",
-            "icon": "mdi:flash",
-            "cards": energy_cards,
-        })
-    views.append({
-        "title": "Info",
-        "path": "info",
-        "icon": "mdi:information",
-        "cards": info_cards,
-    })
+        views.append(
+            {
+                "title": "Energi",
+                "path": "energy",
+                "icon": "mdi:flash",
+                "cards": energy_cards,
+            }
+        )
+    views.append(
+        {
+            "title": "Info",
+            "path": "info",
+            "icon": "mdi:information",
+            "cards": info_cards,
+        }
+    )
 
     return {
         "title": f"Ampæra - {site_name}",
@@ -671,9 +695,7 @@ async def _async_create_or_update_dashboard(
             dashboard_config = yaml.safe_load(dashboard_yaml)
         else:
             # Real mode: build dashboard dynamically from actual synced entities
-            dashboard_config = _build_real_mode_dashboard(
-                site_id, site_name, entity_mappings or {}
-            )
+            dashboard_config = _build_real_mode_dashboard(site_id, site_name, entity_mappings or {})
 
         # Storage file paths
         storage_dir = Path(hass.config.path(".storage"))

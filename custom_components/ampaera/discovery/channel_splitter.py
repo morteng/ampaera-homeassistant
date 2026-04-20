@@ -69,9 +69,7 @@ class ChannelSplitter:
                         entities=ch_entities,
                         capabilities=caps,
                         entity_mapping=mapping,
-                        primary_entity_id=(
-                            ch_entities[0].entity_id if ch_entities else ""
-                        ),
+                        primary_entity_id=(ch_entities[0].entity_id if ch_entities else ""),
                         classification_reason=device.classification_reason,
                         channel_id=ch_id,
                     )
@@ -106,11 +104,7 @@ class ChannelSplitter:
                 capability_entities.setdefault(cap_key, []).append(entity)
 
         # Step 2: Find capabilities with multiple entities (duplicates).
-        multi_cap = {
-            cap: ents
-            for cap, ents in capability_entities.items()
-            if len(ents) > 1
-        }
+        multi_cap = {cap: ents for cap, ents in capability_entities.items() if len(ents) > 1}
 
         if not multi_cap:
             return [("_single", entities)]
@@ -128,17 +122,14 @@ class ChannelSplitter:
                 SplitDetail(
                     device_id=device.ha_device_id,
                     action="skipped",
-                    reason=(
-                        f"Only {len(multi_cap)} capability with duplicates"
-                    ),
+                    reason=(f"Only {len(multi_cap)} capability with duplicates"),
                 )
             )
             return [("_single", entities)]
 
         # Step 4: Safeguard — verify channel naming pattern.
         has_pattern = any(
-            self._has_channel_pattern([e.entity_id for e in ents])
-            for ents in multi_cap.values()
+            self._has_channel_pattern([e.entity_id for e in ents]) for ents in multi_cap.values()
         )
         if not has_pattern:
             _LOGGER.debug(
@@ -214,10 +205,7 @@ class ChannelSplitter:
             )
         )
 
-        return [
-            (ch_id, ch_entities)
-            for ch_id, ch_entities in sorted(channels.items())
-        ]
+        return [(ch_id, ch_entities) for ch_id, ch_entities in sorted(channels.items())]
 
     # ------------------------------------------------------------------
     # Static helpers (ported from DeviceDiscovery)
@@ -238,9 +226,7 @@ class ChannelSplitter:
             return {entity_ids[0]: "ch_1"} if entity_ids else {}
 
         # Strip domain prefix.
-        names = [
-            eid.split(".", 1)[1] if "." in eid else eid for eid in entity_ids
-        ]
+        names = [eid.split(".", 1)[1] if "." in eid else eid for eid in entity_ids]
 
         # Split into underscore-delimited segments.
         segmented = [name.split("_") for name in names]
@@ -252,11 +238,7 @@ class ChannelSplitter:
         num_segs = len(segmented[0])
 
         # Positions where segments differ across entities.
-        differing_positions = [
-            i
-            for i in range(num_segs)
-            if len({s[i] for s in segmented}) > 1
-        ]
+        differing_positions = [i for i in range(num_segs) if len({s[i] for s in segmented}) > 1]
 
         if not differing_positions:
             return {eid: f"ch_{i + 1}" for i, eid in enumerate(entity_ids)}
@@ -284,20 +266,14 @@ class ChannelSplitter:
         if len(entity_ids) < 2:
             return False
 
-        names = [
-            eid.split(".", 1)[1] if "." in eid else eid for eid in entity_ids
-        ]
+        names = [eid.split(".", 1)[1] if "." in eid else eid for eid in entity_ids]
         segmented = [name.split("_") for name in names]
 
         if len({len(s) for s in segmented}) > 1:
             return False
 
         num_segs = len(segmented[0])
-        differing_positions = [
-            i
-            for i in range(num_segs)
-            if len({s[i] for s in segmented}) > 1
-        ]
+        differing_positions = [i for i in range(num_segs) if len({s[i] for s in segmented}) > 1]
 
         if not differing_positions:
             return False

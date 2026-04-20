@@ -171,9 +171,7 @@ class CapabilityAnalyzer:
     # Internal analysis
     # ------------------------------------------------------------------
 
-    def _analyze(
-        self, entity: DiscoveredEntity
-    ) -> tuple[AmperaCapability | None, float]:
+    def _analyze(self, entity: DiscoveredEntity) -> tuple[AmperaCapability | None, float]:
         """Return (capability, confidence) for a single entity."""
         domain = entity.domain
 
@@ -191,9 +189,7 @@ class CapabilityAnalyzer:
 
         return None, 0.0
 
-    def _analyze_sensor(
-        self, entity: DiscoveredEntity
-    ) -> tuple[AmperaCapability | None, float]:
+    def _analyze_sensor(self, entity: DiscoveredEntity) -> tuple[AmperaCapability | None, float]:
         """Analyze a sensor entity."""
         device_class = entity.device_class
         if device_class is None:
@@ -213,22 +209,28 @@ class CapabilityAnalyzer:
             return self._analyze_energy(friendly_name, entity_name, entity.entity_id)
 
         if device_class == "voltage":
-            return self._analyze_phase(
-                friendly_name,
-                AmperaCapability.VOLTAGE_L1,
-                AmperaCapability.VOLTAGE_L2,
-                AmperaCapability.VOLTAGE_L3,
-                AmperaCapability.VOLTAGE,
-            ), 1.0
+            return (
+                self._analyze_phase(
+                    friendly_name,
+                    AmperaCapability.VOLTAGE_L1,
+                    AmperaCapability.VOLTAGE_L2,
+                    AmperaCapability.VOLTAGE_L3,
+                    AmperaCapability.VOLTAGE,
+                ),
+                1.0,
+            )
 
         if device_class == "current":
-            return self._analyze_phase(
-                friendly_name,
-                AmperaCapability.CURRENT_L1,
-                AmperaCapability.CURRENT_L2,
-                AmperaCapability.CURRENT_L3,
-                AmperaCapability.CURRENT,
-            ), 1.0
+            return (
+                self._analyze_phase(
+                    friendly_name,
+                    AmperaCapability.CURRENT_L1,
+                    AmperaCapability.CURRENT_L2,
+                    AmperaCapability.CURRENT_L3,
+                    AmperaCapability.CURRENT,
+                ),
+                1.0,
+            )
 
         if device_class == "temperature":
             return AmperaCapability.TEMPERATURE, 1.0
@@ -311,8 +313,6 @@ class CapabilityAnalyzer:
         return AmperaCapability.ENERGY, 1.0
 
 
-def _matches_any(
-    friendly_name: str, entity_name: str, patterns: tuple[str, ...]
-) -> bool:
+def _matches_any(friendly_name: str, entity_name: str, patterns: tuple[str, ...]) -> bool:
     """Return True if any pattern matches friendly_name or entity_name."""
     return any(p in friendly_name or p in entity_name for p in patterns)

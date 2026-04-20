@@ -39,11 +39,11 @@ GROUP_MIN_SIZE = 3
 # Patterns are applied iteratively so a name like "em16_phase_2 (A1)"
 # strips to "em16" via two rounds.
 _TRAILING_SUFFIX_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"\s*\([^)]*\)\s*$"),                  # "(...)"
+    re.compile(r"\s*\([^)]*\)\s*$"),  # "(...)"
     re.compile(r"[\s_-]*phase[\s_-]*\d+\s*$", re.I),  # "phase 2", "_phase_2"
     re.compile(r"[\s_-]*ch(annel)?[\s_-]*\d+\s*$", re.I),  # "CH3", "channel 1"
-    re.compile(r"[\s_-]+[A-Z]\d{1,2}\s*$"),           # " A1", "_C6"
-    re.compile(r"[\s_-]+\d+\s*$"),                    # " 1", "-2"
+    re.compile(r"[\s_-]+[A-Z]\d{1,2}\s*$"),  # " A1", "_C6"
+    re.compile(r"[\s_-]+\d+\s*$"),  # " 1", "-2"
 )
 
 
@@ -100,8 +100,8 @@ def group_similar_devices(
         meet the group threshold and should be rendered individually. The
         relative order of ungrouped devices matches the input.
     """
-    buckets: dict[tuple[str, AmperaDeviceType, str, str], list[DiscoveredDevice]] = (
-        defaultdict(list)
+    buckets: dict[tuple[str, AmperaDeviceType, str, str], list[DiscoveredDevice]] = defaultdict(
+        list
     )
     order: dict[tuple[str, AmperaDeviceType, str, str], int] = {}
     for idx, device in enumerate(devices):

@@ -269,9 +269,9 @@ EXCLUDED_INTEGRATIONS: set[str] = set()
 # integration (to avoid self-discovery loops), and common security/media
 # integrations that surface as switches or sensors without energy signals.
 NON_ENERGY_INTEGRATIONS: set[str] = {
-    "hassio",         # HA add-ons: HACS, Samba, FTP, Mosquitto, File editor, Terminal & SSH, ...
-    "hacs",           # HACS frontend switches
-    "ampaera",        # our own entities — never re-discover them
+    "hassio",  # HA add-ons: HACS, Samba, FTP, Mosquitto, File editor, Terminal & SSH, ...
+    "hacs",  # HACS frontend switches
+    "ampaera",  # our own entities — never re-discover them
     "eufy_security",
     "eufy_security_ws",
     "ring",

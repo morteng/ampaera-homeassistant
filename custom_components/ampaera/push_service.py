@@ -432,13 +432,13 @@ class AmperaTelemetryPushService:
     async def _run_sensor_stream_publisher(self) -> None:
         """Periodically push selected sensor stream entities via MQTT to Ampæra Data Lab."""
         interval = (
-            self._config_entry.options.get(CONF_SENSOR_STREAM_INTERVAL, DEFAULT_SENSOR_STREAM_INTERVAL)
+            self._config_entry.options.get(
+                CONF_SENSOR_STREAM_INTERVAL, DEFAULT_SENSOR_STREAM_INTERVAL
+            )
             if self._config_entry is not None
             else DEFAULT_SENSOR_STREAM_INTERVAL
         )
-        _LOGGER.info(
-            "Sensor stream publisher started (interval: %ds)", interval
-        )
+        _LOGGER.info("Sensor stream publisher started (interval: %ds)", interval)
         while self._running:
             await asyncio.sleep(interval)
             if not self._running:

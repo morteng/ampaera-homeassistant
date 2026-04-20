@@ -184,9 +184,21 @@ def _collapse_capability_labels(caps: list[AmperaCapability]) -> list[str]:
     a device has, not every phase restated.
     """
     groups: dict[str, list[AmperaCapability]] = {
-        "power_phase": [AmperaCapability.POWER_L1, AmperaCapability.POWER_L2, AmperaCapability.POWER_L3],
-        "voltage_phase": [AmperaCapability.VOLTAGE_L1, AmperaCapability.VOLTAGE_L2, AmperaCapability.VOLTAGE_L3],
-        "current_phase": [AmperaCapability.CURRENT_L1, AmperaCapability.CURRENT_L2, AmperaCapability.CURRENT_L3],
+        "power_phase": [
+            AmperaCapability.POWER_L1,
+            AmperaCapability.POWER_L2,
+            AmperaCapability.POWER_L3,
+        ],
+        "voltage_phase": [
+            AmperaCapability.VOLTAGE_L1,
+            AmperaCapability.VOLTAGE_L2,
+            AmperaCapability.VOLTAGE_L3,
+        ],
+        "current_phase": [
+            AmperaCapability.CURRENT_L1,
+            AmperaCapability.CURRENT_L2,
+            AmperaCapability.CURRENT_L3,
+        ],
     }
     cap_set = set(caps)
     labels: list[str] = []
@@ -251,9 +263,7 @@ def _format_device_label(device: DiscoveredDevice) -> str:
     return f"{device.display_name()} – {type_label}, {count_str} · {summary}"
 
 
-def _format_group_label(
-    group: DeviceGroup, members: list[DiscoveredDevice] | None = None
-) -> str:
+def _format_group_label(group: DeviceGroup, members: list[DiscoveredDevice] | None = None) -> str:
     """Render the picker label for a device group.
 
     ``members`` optionally supplies the DiscoveredDevice instances this group
@@ -342,15 +352,11 @@ def _build_device_picker_options(
     for group in groups:
         members = [device_by_id[mid] for mid in group.member_ids if mid in device_by_id]
         options.append(
-            SelectOptionDict(
-                value=group.group_id, label=_format_group_label(group, members)
-            )
+            SelectOptionDict(value=group.group_id, label=_format_group_label(group, members))
         )
     for device in ungrouped:
         options.append(
-            SelectOptionDict(
-                value=device.ha_device_id, label=_format_device_label(device)
-            )
+            SelectOptionDict(value=device.ha_device_id, label=_format_device_label(device))
         )
 
     default_selection: list[str] = [g.group_id for g in groups if g.is_recommended]
@@ -769,9 +775,7 @@ class AmperaOAuth2FlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
                 discovery = DiscoveryOrchestrator(self.hass)
                 all_devices, _ = discovery.discover()
                 selected_ids = set(self._selected_entities)
-                devices_to_register = [
-                    d for d in all_devices if d.ha_device_id in selected_ids
-                ]
+                devices_to_register = [d for d in all_devices if d.ha_device_id in selected_ids]
                 device_data = [d.to_dict() for d in devices_to_register]
             else:
                 device_data = []
@@ -1064,7 +1068,9 @@ class AmperaOptionsFlow(OptionsFlow):
                 if await api.async_validate_token():
                     # Update the correct token field based on the original auth method
                     auth_method = self.config_entry.data.get(CONF_AUTH_METHOD, AUTH_METHOD_API_KEY)
-                    token_field = CONF_OAUTH_TOKEN if auth_method == AUTH_METHOD_OAUTH else CONF_API_KEY
+                    token_field = (
+                        CONF_OAUTH_TOKEN if auth_method == AUTH_METHOD_OAUTH else CONF_API_KEY
+                    )
                     new_data = {**self.config_entry.data, token_field: api_key}
                     self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
                     # Reload so the running API client picks up the new token.
@@ -1120,9 +1126,7 @@ class AmperaOptionsFlow(OptionsFlow):
                 return await self.async_step_manage_devices()
 
             # Expand any group IDs back to member device IDs before storing.
-            new_selected = expand_group_selections(
-                raw_new_selected, self._manage_device_groups
-            )
+            new_selected = expand_group_selections(raw_new_selected, self._manage_device_groups)
 
             # Update config entry data with new selection
             new_data = {
@@ -1150,9 +1154,7 @@ class AmperaOptionsFlow(OptionsFlow):
             discovery = DiscoveryOrchestrator(self.hass)
             self._discovered_devices, _ = discovery.discover()
             total_count = len(self._discovered_devices)
-            energy_count = sum(
-                1 for d in self._discovered_devices if d.is_energy_relevant
-            )
+            energy_count = sum(1 for d in self._discovered_devices if d.is_energy_relevant)
 
             device_options, _, self._manage_device_groups = _build_device_picker_options(
                 self._discovered_devices,
@@ -1173,9 +1175,7 @@ class AmperaOptionsFlow(OptionsFlow):
         valid_option_values = {opt["value"] for opt in device_options}
         current_selected = [
             value
-            for value in collapse_to_group_ids(
-                stored_selected, self._manage_device_groups
-            )
+            for value in collapse_to_group_ids(stored_selected, self._manage_device_groups)
             if value in valid_option_values
         ]
 
@@ -1202,9 +1202,7 @@ class AmperaOptionsFlow(OptionsFlow):
                                 mode=SelectSelectorMode.LIST,
                             )
                         ),
-                        vol.Optional(
-                            CONF_SHOW_ALL_DEVICES, default=current_show_all
-                        ): bool,
+                        vol.Optional(CONF_SHOW_ALL_DEVICES, default=current_show_all): bool,
                     }
                 ),
                 description_placeholders={
@@ -1218,9 +1216,7 @@ class AmperaOptionsFlow(OptionsFlow):
             )
 
         schema_dict: dict[Any, Any] = {
-            vol.Optional(
-                CONF_SELECTED_ENTITIES, default=current_selected
-            ): SelectSelector(
+            vol.Optional(CONF_SELECTED_ENTITIES, default=current_selected): SelectSelector(
                 SelectSelectorConfig(
                     options=device_options,
                     multiple=True,
@@ -1231,9 +1227,7 @@ class AmperaOptionsFlow(OptionsFlow):
         # Only show the toggle in real mode — there's nothing to hide in
         # simulation mode.
         if not is_simulation:
-            schema_dict[
-                vol.Optional(CONF_SHOW_ALL_DEVICES, default=current_show_all)
-            ] = bool
+            schema_dict[vol.Optional(CONF_SHOW_ALL_DEVICES, default=current_show_all)] = bool
 
         return self.async_show_form(
             step_id="manage_devices",
@@ -1313,9 +1307,7 @@ class AmperaOptionsFlow(OptionsFlow):
             return self.async_show_form(
                 step_id="entity_browser",
                 data_schema=vol.Schema({}),
-                description_placeholders={
-                    "entity_table": "Ingen entiteter synkronisert ennå."
-                },
+                description_placeholders={"entity_table": "Ingen entiteter synkronisert ennå."},
             )
 
         # Build markdown table of all synced entities

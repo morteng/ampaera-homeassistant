@@ -72,9 +72,7 @@ class EntityScanner:
                 # Entity is enabled and has a state
                 state = active_states[entity_id]
                 device_class = state.attributes.get("device_class")
-                friendly_name = state.attributes.get(
-                    "friendly_name", entity_id
-                )
+                friendly_name = state.attributes.get("friendly_name", entity_id)
                 unit = state.attributes.get("unit_of_measurement")
                 state_value = state.state
                 enabled = True

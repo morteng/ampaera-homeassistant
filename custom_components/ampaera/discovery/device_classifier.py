@@ -140,12 +140,16 @@ class DeviceClassifier:
                     device_id=device.ha_device_id,
                     device_name=device.name,
                     device_type=device.device_type.value,
-                    detection_tier=device.classification_reason.split(":")[0]
-                    if ":" in device.classification_reason
-                    else device.classification_reason,
-                    confidence="high"
-                    if device.classification_reason.startswith("integration")
-                    else "medium",
+                    detection_tier=(
+                        device.classification_reason.split(":")[0]
+                        if ":" in device.classification_reason
+                        else device.classification_reason
+                    ),
+                    confidence=(
+                        "high"
+                        if device.classification_reason.startswith("integration")
+                        else "medium"
+                    ),
                     entity_count=len(device.entities),
                 )
             )
@@ -180,14 +184,10 @@ class DeviceClassifier:
             return None
 
         # Determine device type (3-tier detection)
-        device_type, reason = self._determine_device_type(
-            device_name, entities, manufacturer
-        )
+        device_type, reason = self._determine_device_type(device_name, entities, manufacturer)
 
         # Build capability mapping
-        capabilities, entity_mapping, primary_entity_id = self._map_capabilities(
-            entities
-        )
+        capabilities, entity_mapping, primary_entity_id = self._map_capabilities(entities)
 
         if not capabilities:
             return None
@@ -261,9 +261,7 @@ class DeviceClassifier:
         # Tier 4: Domain fallback
         return self._detect_from_domain(entities)
 
-    def _detect_from_integration(
-        self, entities: list[DiscoveredEntity]
-    ) -> AmperaDeviceType | None:
+    def _detect_from_integration(self, entities: list[DiscoveredEntity]) -> AmperaDeviceType | None:
         """Tier 1: Check entity platforms against KNOWN_INTEGRATIONS."""
         for entity in entities:
             if not entity.platform:
@@ -279,9 +277,7 @@ class DeviceClassifier:
                 return device_type
         return None
 
-    def _detect_from_signals(
-        self, entities: list[DiscoveredEntity]
-    ) -> AmperaDeviceType | None:
+    def _detect_from_signals(self, entities: list[DiscoveredEntity]) -> AmperaDeviceType | None:
         """Tier 2: Check entity names against SEMANTIC_SIGNALS patterns."""
         all_names: list[str] = []
         for entity in entities:
@@ -328,9 +324,7 @@ class DeviceClassifier:
                 return device_type
         return None
 
-    def _detect_from_domain(
-        self, entities: list[DiscoveredEntity]
-    ) -> tuple[AmperaDeviceType, str]:
+    def _detect_from_domain(self, entities: list[DiscoveredEntity]) -> tuple[AmperaDeviceType, str]:
         """Tier 4: Domain-based fallback."""
         for entity in entities:
             if entity.domain == "water_heater":
@@ -371,19 +365,14 @@ class DeviceClassifier:
             if cap not in capabilities:
                 capabilities.append(cap)
                 entity_mapping[cap.value] = entity.entity_id
-            elif self._entity_has_better_value(
-                entity, entity_mapping.get(cap.value, ""), entities
-            ):
+            elif self._entity_has_better_value(entity, entity_mapping.get(cap.value, ""), entities):
                 entity_mapping[cap.value] = entity.entity_id
 
             # Track power entities for primary selection
             if cap == AmperaCapability.POWER:
                 name_lower = entity.friendly_name.lower()
                 eid_lower = entity.entity_id.lower()
-                if any(
-                    kw in name_lower or kw in eid_lower
-                    for kw in ("consumption", "total")
-                ):
+                if any(kw in name_lower or kw in eid_lower for kw in ("consumption", "total")):
                     best_consumption_entity = entity.entity_id
                 elif not best_power_entity:
                     best_power_entity = entity.entity_id
@@ -559,9 +548,7 @@ class DeviceClassifier:
         if not entities:
             return None
 
-        capabilities, entity_mapping, primary_entity_id = self._map_capabilities(
-            entities
-        )
+        capabilities, entity_mapping, primary_entity_id = self._map_capabilities(entities)
         if not capabilities:
             return None
 
