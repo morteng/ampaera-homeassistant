@@ -5,6 +5,15 @@ All notable changes to the Ampæra Home Assistant integration.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.1] - 2026-04-20
+
+### Fixed
+- **Unit-based device_class fallback**: Sensors that HA's registry leaves without a `device_class` (Shelly em16 lifetime-energy counters are the motivating case) are now classified by their unit — `kWh`/`Wh` infer `energy`, `W`/`kW` infer `power`, `V`/`A` infer voltage/current, and so on. Rolf's em16 was reporting 90 of 108 measurements in the picker; the 18 remaining unmapped sensors were per-circuit lifetime-energy counters that will now stream into Ampæra as generic `ENERGY`.
+
+### Compatibility
+- Home Assistant: 2024.1.0+
+- Ampæra API: v0.34.0+
+
 ## [2.3.0] - 2026-04-20
 
 ### Added

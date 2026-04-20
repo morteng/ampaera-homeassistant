@@ -190,8 +190,16 @@ class CapabilityAnalyzer:
         return None, 0.0
 
     def _analyze_sensor(self, entity: DiscoveredEntity) -> tuple[AmperaCapability | None, float]:
-        """Analyze a sensor entity."""
+        """Analyze a sensor entity.
+
+        Infers ``device_class`` from the unit when HA hasn't tagged the
+        sensor explicitly — some integrations (Shelly em16 lifetime-energy
+        counters are the motivating case) expose Wh/kWh/V/A/W sensors with
+        a missing device_class, which previously dropped them on the floor.
+        """
         device_class = entity.device_class
+        if device_class is None:
+            device_class = _infer_device_class_from_unit(entity.unit)
         if device_class is None:
             return None, 0.0
 
@@ -316,3 +324,39 @@ class CapabilityAnalyzer:
 def _matches_any(friendly_name: str, entity_name: str, patterns: tuple[str, ...]) -> bool:
     """Return True if any pattern matches friendly_name or entity_name."""
     return any(p in friendly_name or p in entity_name for p in patterns)
+
+
+# Unit → device_class fallbacks. Only unambiguous physical units are listed
+# here; W vs VA, kWh vs kVArh etc. are energy-adjacent but semantically
+# distinct and shouldn't be silently rewritten.
+_UNIT_DEVICE_CLASS: dict[str, str] = {
+    "w": "power",
+    "kw": "power",
+    "mw": "power",
+    "wh": "energy",
+    "kwh": "energy",
+    "mwh": "energy",
+    "v": "voltage",
+    "mv": "voltage",
+    "a": "current",
+    "ma": "current",
+    "°c": "temperature",
+    "°f": "temperature",
+    "c": "temperature",
+    "f": "temperature",
+    "k": "temperature",
+    "%": "humidity",
+}
+
+
+def _infer_device_class_from_unit(unit: str | None) -> str | None:
+    """Guess a device_class from the raw HA unit when HA didn't set one.
+
+    Shelly em16 (and others) expose lifetime-energy kWh sensors without a
+    device_class, which used to make them unmappable. Inferring from the
+    unit lets the existing ``_analyze_energy`` path — and its ENERGY /
+    ENERGY_IMPORT / ENERGY_EXPORT name heuristics — kick in as normal.
+    """
+    if not unit:
+        return None
+    return _UNIT_DEVICE_CLASS.get(unit.strip().lower())
