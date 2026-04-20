@@ -100,6 +100,7 @@ from .discovery import (
     DiscoveredDevice,
     DiscoveryOrchestrator,
 )
+from .discovery.models import AmperaCapability
 from .discovery.grouping import (
     DeviceGroup,
     collapse_to_group_ids,
@@ -142,18 +143,110 @@ _DEVICE_TYPE_ORDER: dict[AmperaDeviceType, int] = {
 }
 
 
+_CAPABILITY_SUMMARY_LABELS: dict[AmperaCapability, str] = {
+    AmperaCapability.POWER: "effekt",
+    AmperaCapability.POWER_L1: "effekt L1",
+    AmperaCapability.POWER_L2: "effekt L2",
+    AmperaCapability.POWER_L3: "effekt L3",
+    AmperaCapability.ENERGY: "energi",
+    AmperaCapability.ENERGY_IMPORT: "import",
+    AmperaCapability.ENERGY_EXPORT: "eksport",
+    AmperaCapability.ENERGY_HOUR: "time-energi",
+    AmperaCapability.ENERGY_DAY: "dag-energi",
+    AmperaCapability.ENERGY_MONTH: "måned-energi",
+    AmperaCapability.VOLTAGE: "spenning",
+    AmperaCapability.VOLTAGE_L1: "spenning L1",
+    AmperaCapability.VOLTAGE_L2: "spenning L2",
+    AmperaCapability.VOLTAGE_L3: "spenning L3",
+    AmperaCapability.CURRENT: "strøm",
+    AmperaCapability.CURRENT_L1: "strøm L1",
+    AmperaCapability.CURRENT_L2: "strøm L2",
+    AmperaCapability.CURRENT_L3: "strøm L3",
+    AmperaCapability.TEMPERATURE: "temperatur",
+    AmperaCapability.TARGET_TEMPERATURE: "måltemp.",
+    AmperaCapability.HUMIDITY: "fuktighet",
+    AmperaCapability.ON_OFF: "på/av",
+    AmperaCapability.CHARGE_LIMIT: "ladegrense",
+    AmperaCapability.SESSION_ENERGY: "økt-energi",
+    AmperaCapability.COST_DAY: "dagskost",
+    AmperaCapability.PEAK_MONTH_1: "måned-peak 1",
+    AmperaCapability.PEAK_MONTH_2: "måned-peak 2",
+    AmperaCapability.PEAK_MONTH_3: "måned-peak 3",
+}
+
+
+def _collapse_capability_labels(caps: list[AmperaCapability]) -> list[str]:
+    """Group 3-phase variants into single 'X (3-fase)' entries.
+
+    Without collapsing, a 3-phase power meter would render six items in the
+    picker summary (power_l1/l2/l3 + voltage_l1/l2/l3) and push the label
+    past the 80-char picker width. Rolf wants to see *what* capabilities
+    a device has, not every phase restated.
+    """
+    groups: dict[str, list[AmperaCapability]] = {
+        "power_phase": [AmperaCapability.POWER_L1, AmperaCapability.POWER_L2, AmperaCapability.POWER_L3],
+        "voltage_phase": [AmperaCapability.VOLTAGE_L1, AmperaCapability.VOLTAGE_L2, AmperaCapability.VOLTAGE_L3],
+        "current_phase": [AmperaCapability.CURRENT_L1, AmperaCapability.CURRENT_L2, AmperaCapability.CURRENT_L3],
+    }
+    cap_set = set(caps)
+    labels: list[str] = []
+    consumed: set[AmperaCapability] = set()
+    for group_caps in groups.values():
+        present = [c for c in group_caps if c in cap_set]
+        if len(present) >= 2:
+            # Use the base name from the first member (e.g. "effekt L1" -> "effekt")
+            base = _CAPABILITY_SUMMARY_LABELS.get(present[0], present[0].value).rsplit(" ", 1)[0]
+            labels.append(f"{base} ({len(present)}-fase)")
+            consumed.update(present)
+    for cap in caps:
+        if cap in consumed:
+            continue
+        labels.append(_CAPABILITY_SUMMARY_LABELS.get(cap, cap.value.replace("_", " ")))
+    return labels
+
+
 def _format_device_label(device: DiscoveredDevice) -> str:
-    """Render the picker label for a single device."""
+    """Render the picker label for a single device.
+
+    Shows a compact capability summary ("effekt (3-fase), temperatur, energi")
+    instead of a bare count ("4 sensorer") so Rolf can tell at a glance what
+    each device actually reports.
+    """
     type_label = _DEVICE_TYPE_LABELS.get(device.device_type, device.device_type.value)
-    sensor_count = len(device.capabilities)
-    sensor_word = "sensor" if sensor_count == 1 else "sensorer"
-    return f"{device.display_name()} – {type_label}, {sensor_count} {sensor_word}"
+    cap_labels = _collapse_capability_labels(device.capabilities)
+    if not cap_labels:
+        summary = "ingen sensorer"
+    elif len(cap_labels) <= 3:
+        summary = ", ".join(cap_labels)
+    else:
+        summary = f"{', '.join(cap_labels[:3])} +{len(cap_labels) - 3}"
+    return f"{device.display_name()} – {type_label} · {summary}"
 
 
-def _format_group_label(group: DeviceGroup) -> str:
-    """Render the picker label for a device group."""
+def _format_group_label(
+    group: DeviceGroup, members: list[DiscoveredDevice] | None = None
+) -> str:
+    """Render the picker label for a device group.
+
+    ``members`` optionally supplies the DiscoveredDevice instances this group
+    contains so the label can list capability summaries alongside the count.
+    """
     type_label = _DEVICE_TYPE_LABELS.get(group.device_type, group.device_type.value)
     unit_word = "enhet" if group.count == 1 else "enheter"
+    cap_union: list[AmperaCapability] = []
+    if members:
+        seen: set[AmperaCapability] = set()
+        for member in members:
+            for cap in member.capabilities:
+                if cap not in seen:
+                    seen.add(cap)
+                    cap_union.append(cap)
+    cap_labels = _collapse_capability_labels(cap_union) if cap_union else []
+    if cap_labels:
+        summary = ", ".join(cap_labels[:3])
+        if len(cap_labels) > 3:
+            summary += f" +{len(cap_labels) - 3}"
+        return f"{group.base_name} – {type_label}, {group.count} {unit_word} · {summary}"
     return f"{group.base_name} – {type_label}, {group.count} {unit_word} (gruppert)"
 
 
@@ -201,11 +294,17 @@ def _build_device_picker_options(
         )
 
     options: list[SelectOptionDict] = []
+    # Lookup table for resolving group.member_ids -> DiscoveredDevice so
+    # group labels can include a capability summary, not just the count.
+    device_by_id = {d.ha_device_id: d for d in visible}
     # Groups render first within each device type so the meaningful
     # rollups are at the top of the list.
     for group in groups:
+        members = [device_by_id[mid] for mid in group.member_ids if mid in device_by_id]
         options.append(
-            SelectOptionDict(value=group.group_id, label=_format_group_label(group))
+            SelectOptionDict(
+                value=group.group_id, label=_format_group_label(group, members)
+            )
         )
     for device in ungrouped:
         options.append(
