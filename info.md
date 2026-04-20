@@ -1,6 +1,6 @@
 # Ampæra Energy - Home Assistant Integration
 
-**Version: 2.2.2**
+**Version: 2.3.0**
 
 Connect your Home Assistant to the Ampæra Smart Home Energy Management Platform.
 

@@ -5,6 +5,16 @@ All notable changes to the Ampæra Home Assistant integration.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-04-20
+
+### Added
+- **Mapped vs. total measurement counts in the picker**: Device and group labels now show `12 av 17 målinger` when HA exposes more sensors than Ampæra ingests, and `12 målinger` when every sensor maps. For grouped meters like the Shelly em16 the counts are rolled up across all members. Users can now see at a glance which devices have unmapped HA sensors (reactive power, frequency, power factor, vendor-specific counters) that are being skipped.
+- **Dropped-entity logging at INFO**: Discovery now logs one INFO line per device that has unmapped entities, listing the exact HA entity IDs being skipped. Makes it straightforward to explain why e.g. an AMS reader with 17 HA sensors only surfaces 12 measurements in Ampæra without having to enable debug logging.
+
+### Compatibility
+- Home Assistant: 2024.1.0+
+- Ampæra API: v0.34.0+
+
 ## [2.2.2] - 2026-04-13
 
 ### Changed

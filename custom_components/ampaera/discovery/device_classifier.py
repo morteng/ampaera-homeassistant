@@ -210,6 +210,22 @@ class DeviceClassifier:
         )
         device.is_energy_relevant = self._is_energy_relevant(device)
         device.is_recommended = self._is_recommended(device)
+
+        # Surface the mapped/total gap so users can see exactly which HA
+        # entities Ampæra is skipping for a given device. Logged at INFO so
+        # it shows up in the default HA log without enabling debug.
+        enabled_entities = [e for e in entities if e.enabled]
+        dropped = [e for e in enabled_entities if e.capability is None]
+        if dropped:
+            _LOGGER.info(
+                "Ampaera: %s (%s) — mapping %d/%d HA sensors; dropping %d unmapped: %s",
+                device_name,
+                device_type.value,
+                len(entity_mapping),
+                len(enabled_entities),
+                len(dropped),
+                ", ".join(sorted(e.entity_id for e in dropped)),
+            )
         return device
 
     # ------------------------------------------------------------------

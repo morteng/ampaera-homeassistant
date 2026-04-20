@@ -205,12 +205,38 @@ def _collapse_capability_labels(caps: list[AmperaCapability]) -> list[str]:
     return labels
 
 
+def _count_measurements(device: DiscoveredDevice) -> tuple[int, int]:
+    """Return (mapped, total) measurement counts for a device.
+
+    ``mapped`` is the number of entities that classified into an Ampæra
+    capability — these are what actually reach the backend. ``total`` is
+    the number of enabled HA entities scanned for the device. The gap
+    between them is the entities HA exposes that Ampæra does not ingest
+    (reactive power, frequency, power factor, vendor-specific counters…).
+
+    Showing both numbers in the picker lets Rolf see at a glance that
+    e.g. the AMS reader has 17 HA sensors but only 12 flow into Ampæra,
+    instead of silently dropping the delta.
+    """
+    total = sum(1 for e in device.entities if e.enabled)
+    mapped = len(device.entity_mapping)
+    return mapped, total
+
+
+def _format_measurement_count(mapped: int, total: int) -> str:
+    """Render "M av N målinger" / "M målinger" depending on whether any were dropped."""
+    if total > mapped:
+        return f"{mapped} av {total} målinger"
+    return f"{mapped} målinger"
+
+
 def _format_device_label(device: DiscoveredDevice) -> str:
     """Render the picker label for a single device.
 
     Shows a compact capability summary ("effekt (3-fase), temperatur, energi")
-    instead of a bare count ("4 sensorer") so Rolf can tell at a glance what
-    each device actually reports.
+    alongside a mapped/total measurement count so Rolf can tell at a glance
+    both *what* each device reports and *how much* of its HA data actually
+    flows into Ampæra.
     """
     type_label = _DEVICE_TYPE_LABELS.get(device.device_type, device.device_type.value)
     cap_labels = _collapse_capability_labels(device.capabilities)
@@ -220,7 +246,9 @@ def _format_device_label(device: DiscoveredDevice) -> str:
         summary = ", ".join(cap_labels)
     else:
         summary = f"{', '.join(cap_labels[:3])} +{len(cap_labels) - 3}"
-    return f"{device.display_name()} – {type_label} · {summary}"
+    mapped, total = _count_measurements(device)
+    count_str = _format_measurement_count(mapped, total)
+    return f"{device.display_name()} – {type_label}, {count_str} · {summary}"
 
 
 def _format_group_label(
@@ -229,11 +257,14 @@ def _format_group_label(
     """Render the picker label for a device group.
 
     ``members`` optionally supplies the DiscoveredDevice instances this group
-    contains so the label can list capability summaries alongside the count.
+    contains so the label can list capability summaries and a rollup of
+    mapped/total measurement counts alongside the device count.
     """
     type_label = _DEVICE_TYPE_LABELS.get(group.device_type, group.device_type.value)
     unit_word = "enhet" if group.count == 1 else "enheter"
     cap_union: list[AmperaCapability] = []
+    total_mapped = 0
+    total_scanned = 0
     if members:
         seen: set[AmperaCapability] = set()
         for member in members:
@@ -241,13 +272,22 @@ def _format_group_label(
                 if cap not in seen:
                     seen.add(cap)
                     cap_union.append(cap)
+            m, t = _count_measurements(member)
+            total_mapped += m
+            total_scanned += t
     cap_labels = _collapse_capability_labels(cap_union) if cap_union else []
+    count_suffix = ""
+    if total_scanned:
+        count_suffix = f" · {_format_measurement_count(total_mapped, total_scanned)}"
     if cap_labels:
         summary = ", ".join(cap_labels[:3])
         if len(cap_labels) > 3:
             summary += f" +{len(cap_labels) - 3}"
-        return f"{group.base_name} – {type_label}, {group.count} {unit_word} · {summary}"
-    return f"{group.base_name} – {type_label}, {group.count} {unit_word} (gruppert)"
+        return (
+            f"{group.base_name} – {type_label}, {group.count} {unit_word}"
+            f"{count_suffix} · {summary}"
+        )
+    return f"{group.base_name} – {type_label}, {group.count} {unit_word}{count_suffix} (gruppert)"
 
 
 def _build_device_picker_options(
