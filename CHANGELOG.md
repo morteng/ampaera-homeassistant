@@ -5,6 +5,23 @@ All notable changes to the Ampæra Home Assistant integration.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.2] - 2026-04-27
+
+### Fixed
+- **Power discovery prefers instantaneous over derived sensors.** When a device
+  exposed both `*_power` (live, W) and `*_average_power` / `*_max_power` /
+  `*_min_power`, capability discovery used to pick the first one iterated —
+  often the average sensor. The Ampæra dashboard then showed a smoothly-drifting
+  ~hour-mean instead of real-time power. Discovery now lowers confidence on
+  any sensor whose name contains `average`, `avg`, `min_power`, `max_power`,
+  or `peak`, and the device classifier picks the highest-confidence entity for
+  each capability. Affects Tibber Pulse and similar utility-meter integrations
+  that expose multiple power sensors per device.
+
+  After upgrading, the integration must re-discover entities (reload the
+  config entry, or restart Home Assistant) for existing devices to pick up
+  the corrected mapping.
+
 ## [2.3.1] - 2026-04-20
 
 ### Fixed

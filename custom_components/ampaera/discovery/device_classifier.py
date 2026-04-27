@@ -365,8 +365,23 @@ class DeviceClassifier:
             if cap not in capabilities:
                 capabilities.append(cap)
                 entity_mapping[cap.value] = entity.entity_id
-            elif self._entity_has_better_value(entity, entity_mapping.get(cap.value, ""), entities):
-                entity_mapping[cap.value] = entity.entity_id
+            else:
+                # Prefer higher capability_confidence first — this is what
+                # disqualifies derived sensors like Tibber's _average_power
+                # (confidence 0.6) when the live _power sensor (1.0) exists
+                # for the same device. Fall back to the existing zero/non-zero
+                # heuristic when confidences match.
+                current_id = entity_mapping.get(cap.value, "")
+                current_conf = next(
+                    (e.capability_confidence for e in entities if e.entity_id == current_id),
+                    0.0,
+                )
+                if entity.capability_confidence > current_conf:
+                    entity_mapping[cap.value] = entity.entity_id
+                elif entity.capability_confidence == current_conf and self._entity_has_better_value(
+                    entity, current_id, entities
+                ):
+                    entity_mapping[cap.value] = entity.entity_id
 
             # Track power entities for primary selection
             if cap == AmperaCapability.POWER:

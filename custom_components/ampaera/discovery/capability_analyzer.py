@@ -211,7 +211,20 @@ class CapabilityAnalyzer:
         )
 
         if device_class == "power":
-            return self._analyze_power(friendly_name), 1.0
+            # Tibber Pulse (and similar) expose both `_power` (instantaneous)
+            # and `_average_power` (running hour-average). Both carry
+            # device_class=power. Picking the average sensor — which we did
+            # for Rolf — produces a smoothly-drifting ~hour-mean that hides
+            # appliance cycling (kettle, oven, EV) and makes the dashboard
+            # look frozen. Lower the confidence for averaged/min/max sensors
+            # so the live one wins on tie-break.
+            entity_lower = (entity.entity_id or "").lower()
+            is_derived = any(
+                tag in friendly_name or tag in entity_lower
+                for tag in ("average", "_avg", " avg", "min_power", "max_power", "peak")
+            )
+            confidence = 0.6 if is_derived else 1.0
+            return self._analyze_power(friendly_name), confidence
 
         if device_class == "energy":
             return self._analyze_energy(friendly_name, entity_name, entity.entity_id)
