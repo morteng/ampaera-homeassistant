@@ -11,6 +11,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
+from typing import Literal
 
 
 class AmperaDeviceType(StrEnum):
@@ -199,6 +200,21 @@ class SplitDetail:
 
 
 @dataclass
+class PhaseConsolidationDetail:
+    """Record of one phase-consolidation merge.
+
+    Tibber-style integrations model a 3-phase meter as a parent device plus
+    phase-child devices that each carry a single voltage entity. The
+    PhaseConsolidator stage merges those children onto the parent so the
+    backend sees one device with full L1/L2/L3 voltage capabilities.
+    """
+
+    parent_id: str
+    child_ids: list[str]
+    signal: Literal["via_device_id", "name_suffix"]
+
+
+@dataclass
 class DiscoveryReport:
     """Full report from a discovery pipeline run."""
 
@@ -231,6 +247,10 @@ class DiscoveryReport:
     channel_splits_performed: int = 0
     channel_splits_skipped: int = 0
     split_details: list[SplitDetail] = field(default_factory=list)
+
+    # Phase consolidation (Stage 4)
+    phases_consolidated: int = 0
+    consolidation_details: list[PhaseConsolidationDetail] = field(default_factory=list)
 
     # Sync
     auto_enabled_entities: list[str] = field(default_factory=list)

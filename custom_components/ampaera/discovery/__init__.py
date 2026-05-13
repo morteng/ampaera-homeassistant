@@ -20,6 +20,7 @@ from .models import (
     DiscoveredEntity,
     DiscoveryReport,
 )
+from .phase_consolidator import PhaseConsolidator
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -45,6 +46,7 @@ class DiscoveryOrchestrator:
         self._scanner = EntityScanner(hass)
         self._analyzer = CapabilityAnalyzer()
         self._classifier = DeviceClassifier(simulation_mode=simulation_mode)
+        self._consolidator = PhaseConsolidator()
         self._splitter = ChannelSplitter()
         self._report: DiscoveryReport | None = None
 
@@ -76,11 +78,21 @@ class DiscoveryOrchestrator:
         devices = self._classifier.classify(entities, device_info, report)
         _LOGGER.info("Stage 3 (classify): %d devices found", report.devices_found)
 
-        # Stage 4: Split channels
+        # Stage 4: Consolidate phase-child siblings onto their parents
+        # (e.g. Tibber Pulse PHASE2/PHASE3 devices merge into the parent meter).
+        device_registry = dr.async_get(self._hass)
+        devices = self._consolidator.consolidate(devices, device_registry, report)
+        if report.phases_consolidated:
+            _LOGGER.info(
+                "Stage 4 (consolidate): %d phase-child device(s) merged into parents",
+                report.phases_consolidated,
+            )
+
+        # Stage 5: Split channels
         devices = self._splitter.split(devices, report)
         if report.channel_splits_performed:
             _LOGGER.info(
-                "Stage 4 (split): %d devices split into channels",
+                "Stage 5 (split): %d devices split into channels",
                 report.channel_splits_performed,
             )
 

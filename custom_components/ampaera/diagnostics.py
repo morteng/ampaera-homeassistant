@@ -196,6 +196,17 @@ async def async_get_config_entry_diagnostics(
                 "performed": report.channel_splits_performed,
                 "skipped": report.channel_splits_skipped,
             },
+            "phase_consolidation": {
+                "phases_consolidated": report.phases_consolidated,
+                "details": [
+                    {
+                        "parent_id": d.parent_id,
+                        "child_ids": d.child_ids,
+                        "signal": d.signal,
+                    }
+                    for d in report.consolidation_details
+                ],
+            },
             "auto_enabled": report.auto_enabled_entities,
         }
 

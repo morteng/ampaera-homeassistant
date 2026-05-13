@@ -5,6 +5,42 @@ All notable changes to the Ampæra Home Assistant integration.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-05-13
+
+### Fixed
+- **Per-phase voltage discovery for Tibber Pulse (and similar phase-split
+  topologies).** Tibber's HA integration models a 3-phase Pulse meter as a
+  parent device plus separate `*PHASE2` / `*PHASE3` child devices, each
+  carrying a single voltage sensor. Two bugs were stranding L2/L3 voltage
+  before it reached the cloud:
+
+  1. Capability detection only recognised `"phase 2"` (with a space) and
+     missed the slug / friendly-name patterns Tibber actually emits
+     (`voltage_phase2`, `Voltage Phase2`, `voltage_phase_2`, …). Voltage
+     L2/L3 sensors were misclassified as the generic `VOLTAGE` capability
+     and dropped on the cloud-side ingestion gate.
+  2. Each phase-child HA device became its own Ampæra device, so its
+     voltage readings shipped without a `power_w` value and were rejected
+     by ingestion.
+
+  Discovery now (a) detects phase indices with a strict regex on both
+  friendly_name and entity_id, rejecting false positives like `phase10`
+  or `l10`, and (b) runs a new consolidation stage that merges phase-child
+  siblings onto their POWER_METER parent using `via_device_id` from HA's
+  device registry (with a name-suffix fallback for integrations that don't
+  set it).
+
+  After upgrading, the orphan `*PHASE2` / `*PHASE3` device rows in the
+  Ampæra device picker disappear automatically within one or two sync
+  cycles via the existing soft-delete handling — no manual cleanup
+  required. The integration must re-discover entities (reload the config
+  entry, or restart Home Assistant) for the merged voltage capabilities
+  to take effect on existing devices.
+
+### Compatibility
+- Home Assistant: 2024.1.0+
+- Ampæra API: v0.34.0+
+
 ## [2.3.2] - 2026-04-27
 
 ### Fixed

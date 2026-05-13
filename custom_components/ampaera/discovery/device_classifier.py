@@ -376,10 +376,9 @@ class DeviceClassifier:
                     (e.capability_confidence for e in entities if e.entity_id == current_id),
                     0.0,
                 )
-                if entity.capability_confidence > current_conf:
-                    entity_mapping[cap.value] = entity.entity_id
-                elif entity.capability_confidence == current_conf and self._entity_has_better_value(
-                    entity, current_id, entities
+                if entity.capability_confidence > current_conf or (
+                    entity.capability_confidence == current_conf
+                    and self._entity_has_better_value(entity, current_id, entities)
                 ):
                     entity_mapping[cap.value] = entity.entity_id
 

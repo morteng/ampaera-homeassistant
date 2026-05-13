@@ -8,6 +8,7 @@ Home Assistant dependencies.
 from __future__ import annotations
 
 import logging
+import re
 
 from .models import (
     AmperaCapability,
@@ -124,6 +125,32 @@ _COST_DAY_PATTERNS: tuple[str, ...] = (
 
 _ENERGY_SKIP_PATTERNS: frozenset[str] = frozenset({"max"})
 
+# Phase index detector. Recognises the digit (1/2/3) in patterns like
+# ``L1`` / ``l_2`` / ``phase3`` / ``Phase 2`` / ``phase-1``. The leading and
+# trailing boundaries reject ``l10`` / ``phase12`` / ``html1abc`` etc., which
+# would otherwise be silently re-labelled as L1.
+#
+# Tibber Pulse motivates this: it emits ``voltage_phase2`` / ``Voltage Phase2``
+# (no space between 'phase' and digit). The old literal substring check for
+# ``"phase 2"`` missed those and stranded L2/L3 voltage on the floor.
+_PHASE_PATTERN = re.compile(
+    r"(?:^|[\s_\-])(?:l|phase[\s_\-]?)([123])(?=$|[\s_\-])",
+    re.IGNORECASE,
+)
+
+
+def _phase_index(text: str) -> int | None:
+    """Return 1, 2, or 3 if ``text`` carries an unambiguous phase marker.
+
+    Looks for ``L{N}`` / ``phase{N}`` / ``phase {N}`` / ``phase_{N}`` /
+    ``phase-{N}`` with strict word boundaries on both ends so we never
+    mis-classify ``l10``, ``phase12``, ``html1abc`` etc.
+    """
+    if not text:
+        return None
+    match = _PHASE_PATTERN.search(text)
+    return int(match.group(1)) if match else None
+
 
 class CapabilityAnalyzer:
     """Stage 2: Analyze entities and determine their Ampaera capabilities."""
@@ -224,7 +251,7 @@ class CapabilityAnalyzer:
                 for tag in ("average", "_avg", " avg", "min_power", "max_power", "peak")
             )
             confidence = 0.6 if is_derived else 1.0
-            return self._analyze_power(friendly_name), confidence
+            return self._analyze_power(friendly_name, entity_name), confidence
 
         if device_class == "energy":
             return self._analyze_energy(friendly_name, entity_name, entity.entity_id)
@@ -233,6 +260,7 @@ class CapabilityAnalyzer:
             return (
                 self._analyze_phase(
                     friendly_name,
+                    entity_name,
                     AmperaCapability.VOLTAGE_L1,
                     AmperaCapability.VOLTAGE_L2,
                     AmperaCapability.VOLTAGE_L3,
@@ -245,6 +273,7 @@ class CapabilityAnalyzer:
             return (
                 self._analyze_phase(
                     friendly_name,
+                    entity_name,
                     AmperaCapability.CURRENT_L1,
                     AmperaCapability.CURRENT_L2,
                     AmperaCapability.CURRENT_L3,
@@ -268,28 +297,31 @@ class CapabilityAnalyzer:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _analyze_power(friendly_name: str) -> AmperaCapability:
-        if "l1" in friendly_name or "phase 1" in friendly_name:
+    def _analyze_power(friendly_name: str, entity_name: str) -> AmperaCapability:
+        idx = _phase_index(friendly_name) or _phase_index(entity_name)
+        if idx == 1:
             return AmperaCapability.POWER_L1
-        if "l2" in friendly_name or "phase 2" in friendly_name:
+        if idx == 2:
             return AmperaCapability.POWER_L2
-        if "l3" in friendly_name or "phase 3" in friendly_name:
+        if idx == 3:
             return AmperaCapability.POWER_L3
         return AmperaCapability.POWER
 
     @staticmethod
     def _analyze_phase(
         friendly_name: str,
+        entity_name: str,
         l1: AmperaCapability,
         l2: AmperaCapability,
         l3: AmperaCapability,
         generic: AmperaCapability,
     ) -> AmperaCapability:
-        if "l1" in friendly_name or "phase 1" in friendly_name:
+        idx = _phase_index(friendly_name) or _phase_index(entity_name)
+        if idx == 1:
             return l1
-        if "l2" in friendly_name or "phase 2" in friendly_name:
+        if idx == 2:
             return l2
-        if "l3" in friendly_name or "phase 3" in friendly_name:
+        if idx == 3:
             return l3
         return generic
 
